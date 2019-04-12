@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.271
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "brays", "brays\brays.csproj", "{10558DC2-23E8-4AA6-8703-26C6431656DC}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "brays.tests", "brays.tests\brays.tests.csproj", "{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {20C2B0D5-57E1-4099-85D5-0397FDA7453B}
+	EndGlobalSection
+EndGlobal
