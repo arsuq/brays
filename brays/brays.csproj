@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp2.2</TargetFramework>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MemoryLanes" Version="1.4.0" />
+  </ItemGroup>
 
 </Project>
