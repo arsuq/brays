@@ -1,4 +1,5 @@
 ﻿using System;
+using TestSurface;
 
 namespace brays.tests
 {
@@ -6,7 +7,7 @@ namespace brays.tests
 	{
 		static void Main(string[] args)
 		{
-			Console.WriteLine("Hello World!");
+			new Runner().Run(args);
 		}
 	}
 }

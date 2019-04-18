@@ -1,13 +1,16 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace brays
 {
 	public class EmitterCfg
 	{
-		public ushort TileSize;
-		public int AckDelayMs;
-		public int ConcurrentReceivers;
+		public ushort TileSize = 40_000;
+		public int ProbeFreqMS = 4000;
+		public int ErrorAwaitMS = 3000;
+		public int MaxRetries = 8;
+		public int CleanupFreqMS = 8000;
+		public TimeSpan SentBlockRetention = new TimeSpan(0, 0, 30);
+		public TimeSpan SignalAwait = new TimeSpan(0, 0, 30);
+
 	}
 }

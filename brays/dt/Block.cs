@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Threading;
 
 namespace brays
@@ -16,7 +15,7 @@ namespace brays
 			if (frag.Length % tileSize != 0)
 				TileCount++;
 
-			blockTiles = new BitArray(TileCount);
+			tileMap = new BitMask(TileCount);
 		}
 
 		public Block(int id, int tileCount, ushort tileSize, IMemoryHighway hw)
@@ -24,8 +23,23 @@ namespace brays
 			ID = id;
 			TileSize = tileSize;
 			TileCount = tileCount;
+			IsIncoming = true;
 			fragment = hw.AllocFragment(tileSize * tileCount);
-			blockTiles = new BitArray(TileCount);
+			tileMap = new BitMask(TileCount);
+		}
+
+		public bool this[int index]
+		{
+			get => tileMap[index];
+		}
+
+		public void Dispose()
+		{
+			if (fragment != null && !fragment.IsDisposed)
+			{
+				fragment.Dispose();
+				fragment = null;
+			}
 		}
 
 		internal void Receive(FRAME f)
@@ -34,11 +48,11 @@ namespace brays
 			{
 				if (f.TileCount != TileCount) throw new Exception();
 
-				if (!blockTiles[f.TileIndex])
+				if (!tileMap[f.TileIndex])
 				{
-					blockTiles[f.TileIndex] = true;
+					f.Data.CopyTo(fragment.Span().Slice(f.TileIndex * TileSize));
+					tileMap[f.TileIndex] = true;
 					markedTiles++;
-					f.Data.CopyTo(fragment.Span().Slice(f.TileIndex * TileCount));
 				}
 			}
 		}
@@ -50,58 +64,50 @@ namespace brays
 				if (upTo)
 				{
 					for (int i = 0; i <= idx; i++)
-						if (!blockTiles[i])
+						if (!tileMap[i])
 						{
-							blockTiles[i] = true;
+							tileMap[i] = true;
 							markedTiles++;
 						}
 				}
-				else if (!blockTiles[idx])
+				else if (!tileMap[idx])
 				{
-					blockTiles[idx] = true;
+					tileMap[idx] = true;
 					markedTiles++;
 				}
 			}
 		}
 
-		public bool this[int index]
+		internal void Mark(Span<byte> mask)
 		{
-			get
+			if (mask != null) return;
+
+			lock (sync)
 			{
-				lock (sync) return blockTiles[index];
+				var B = new BitMask(mask);
+
+				for (int i = 0; i < mask.Length; i++)
+					if (B[i])
+					{
+						tileMap[i] = true;
+						markedTiles++;
+					}
 			}
 		}
 
-		public int MarkedLine()
-		{
-			lock (sync)
-			{
-				for (int i = 0; i < blockTiles.Length; i++)
-					if (!blockTiles[i]) return i - 1;
-
-				return 0;
-			}
-		}
-
-		public void Dispose()
-		{
-			lock (sync)
-				if (fragment != null && !fragment.IsDisposed)
-				{
-					fragment.Dispose();
-					fragment = null;
-				}
-		}
-
-		public MemoryFragment Memory => fragment;
+		public MemoryFragment Fragment => fragment;
 		public int MarkedTiles => Volatile.Read(ref markedTiles);
 		public bool IsComplete => MarkedTiles == TileCount;
 
 		public readonly int ID;
 		public readonly int TileCount;
 		public readonly ushort TileSize;
+		public readonly bool IsIncoming;
 
-		BitArray blockTiles;
+		internal readonly BitMask tileMap;
+		internal byte[] reqAckDgram;
+		internal DateTime sentTime;
+
 		int markedTiles;
 		object sync = new object();
 		MemoryFragment fragment;

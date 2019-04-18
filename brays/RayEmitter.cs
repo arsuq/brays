@@ -9,109 +9,290 @@ namespace brays
 {
 	public class RayEmitter : IDisposable
 	{
-		public RayEmitter(IPEndPoint listen, Action<Block> onReceived, EmitterCfg cfg)
+		public RayEmitter(Action<MemoryFragment> onReceived, EmitterCfg cfg)
 		{
-			highway = new HeapHighway(
-				new HighwaySettings(UDP_MAX),
-				UDP_MAX, UDP_MAX, UDP_MAX, UDP_MAX);
+			if (onReceived == null || cfg == null) throw new ArgumentNullException();
 
-			this.onReceived = onReceived;
+			highway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			this.cfg = cfg;
-			this.source = listen;
-			socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 		}
 
 		public void Dispose()
 		{
 			if (highway != null)
-			{
-				highway.Dispose();
-				socket.Dispose();
-				highway = null;
-			}
+				try
+				{
+					Interlocked.Exchange(ref stop, 1);
+					highway.Dispose();
+					socket.Dispose();
+					highway = null;
+				}
+				catch { }
 		}
 
-		public async Task LockOn(IPEndPoint ep)
+		public void LockOn(IPEndPoint listen, IPEndPoint target)
 		{
-			socket.Bind(source);
-			await socket.ConnectAsync(target);
-			receiver = receive();
+			Volatile.Write(ref isLocked, false);
+
+			this.source = listen;
+			this.target = target;
+
+			if (socket != null)
+			{
+				Interlocked.Exchange(ref stop, 1);
+				receiveTask?.Dispose();
+				probingTask?.Dispose();
+				cleanupTask?.Dispose();
+				socket.Close();
+			}
+
+			socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+			socket.Bind(this.source);
+			socket.Connect(target);
+			Interlocked.Exchange(ref stop, 0);
+			receiveTask = receive();
+			probingTask = probe();
+			cleanupTask = cleanup();
 			Volatile.Write(ref isLocked, true);
 		}
 
-		public void Probe()
+		public async Task<bool> Beam(MemoryFragment f, int reqAckRetries = 4, int reqAckDelayMS = 1200)
 		{
-			var probe = Interlocked.Increment(ref frameCounter);
-			Span<byte> lead = stackalloc byte[1];
-			socket.Send(lead);
+			var bid = Interlocked.Increment(ref blockCounter);
+			var b = new Block(bid, cfg.TileSize, f);
+
+			if (blockMap.TryAdd(bid, b))
+			{
+				if (b.TileCount > 1 && !await reqack(b, reqAckRetries, reqAckDelayMS))
+					return false;
+
+				await Task.Run(() => beam(b));
+				return true;
+			}
+
+			return false;
 		}
 
 		public bool IsLocked => isLocked;
 		public int FrameCounter => frameCounter;
 		public IPEndPoint Target => target;
-		public DateTime LastProbe => new DateTime(Volatile.Read(ref lastProbeTick));
-
+		public DateTime LastProbe => new DateTime(Volatile.Read(ref lastReceivedProbeTick));
+		public Exception Exception => exception;
 
 		void beam(Block b)
 		{
 			if (b == null) throw new ArgumentNullException();
-			var lead = (byte)Lead.Block;
+			if (cfg.TileSize != b.TileSize) throw new ArgumentException("TileSize mismatch");
+
 			var size = cfg.TileSize;
-			var count = b.Memory.Length / size;
-			if (b.Memory.Length % size != 0) count++;
+			var count = b.Fragment.Length / size;
+
+			if (b.Fragment.Length % size != 0) count++;
 
 			for (int i = 0; i < count; i++)
 				using (var mf = highway.Alloc(size))
 				{
-					var s = b.Memory.Span().Slice(i * size);
+					var s = b.Fragment.Span().Slice(i * size);
 					var fid = Interlocked.Increment(ref frameCounter);
 					var f = new FRAME(fid, b.ID, count, i, (ushort)s.Length, 0, s);
-					mf.Write(lead, 0);
-					f.Write(mf.Span().Slice(1));
+
+					f.Write(mf.Span());
 					socket.Send(mf);
 				}
 
-			status(true, b.ID, count, count);
+			b.sentTime = DateTime.Now;
+			status(true, b.ID, count, null);
 		}
 
 		void beam(Block b, int tileIdx)
 		{
 			if (b == null) throw new ArgumentNullException();
-			var lead = (byte)Lead.Block;
+			if (cfg.TileSize != b.TileSize) throw new ArgumentException("TileSize mismatch");
 
 			using (var mf = highway.Alloc(b.TileSize + 50))
 			{
-				var s = b.Memory.Span().Slice(tileIdx * b.TileSize);
+				var s = b.Fragment.Span().Slice(tileIdx * b.TileSize);
 				var fid = Interlocked.Increment(ref frameCounter);
 				var f = new FRAME(fid, b.ID, b.TileCount, tileIdx, (ushort)s.Length, 0, s);
-				mf.Write(lead, 0);
-				f.Write(mf.Span().Slice(1));
+
+				f.Write(mf.Span());
 				socket.Send(mf);
-				b.Mark(tileIdx, false);
 			}
 		}
 
-		void status(bool ask, int blockID, int tilesCount, int tileIdx)
+		void status(bool ask, int blockID, int tilesCount, Span<byte> tileMap)
 		{
 			var fid = Interlocked.Increment(ref frameCounter);
+			var len = tileMap.Length + 13;
+			Span<byte> s = stackalloc byte[len];
 
-			Span<byte> s = stackalloc byte[17];
-			s[0] = ask ? (byte)Lead.AskStatus : (byte)Lead.Status;
-			var status = new STATUS(fid, blockID, tilesCount, tileIdx);
-
-			status.Write(s.Slice(1));
+			STATUS.Make(ask, fid, blockID, tilesCount, tileMap, s);
 			socket.Send(s);
 		}
 
-		void signal(byte lead, int refID, int mark)
+		void signal(int refID, int mark, bool isError = false)
 		{
 			var fid = Interlocked.Increment(ref frameCounter);
-
-			Span<byte> s = stackalloc byte[13];
-			var signal = new SIGNAL(lead, fid, refID, mark);
+			var signal = new SIGNAL(fid, refID, mark, isError);
+			Span<byte> s = stackalloc byte[signal.LENGTH];
 
 			signal.Write(s);
 			socket.Send(s);
+		}
+
+		void procFrame(Span<byte> s)
+		{
+			try
+			{
+				var lead = (Lead)s[0];
+
+				switch (lead)
+				{
+					case Lead.Probe: Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks); break;
+					case Lead.Signal: procSignal(s); break;
+					case Lead.Error: procError(s); break;
+					case Lead.Block: procBlock(s); break;
+					case Lead.AskStatus: procAskStatus(s); break;
+					case Lead.Status: procStatus(s); break;
+					default:
+					break;
+				}
+			}
+			catch (Exception ex)
+			{
+				// log
+			}
+		}
+
+		void procBlock(Span<byte> s)
+		{
+			var f = new FRAME(s);
+
+			if (!blockMap.ContainsKey(f.BlockID))
+			{
+				// If it's just one tile there is no need of ReqAck
+				if (f.TileCount == 1)
+				{
+					if (!blockMap.ContainsKey(f.BlockID))
+						blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TileCount, f.Length, highway));
+
+					signal(f.FrameID, (int)SignalKind.ACK);
+				}
+				else
+				{
+					signal(f.FrameID, (int)ErrorCode.NoTranferAck, true);
+					return;
+				}
+			}
+
+			var b = blockMap[f.BlockID];
+
+			b.Receive(f);
+
+			if (b.IsComplete)
+				Task.Run(() =>
+				{
+					try
+					{
+						onReceived(b);
+					}
+					catch { }
+				});
+		}
+
+		void procError(Span<byte> s)
+		{
+			var sg = new SIGNAL(s);
+		}
+
+		void procStatus(Span<byte> s)
+		{
+			var st = new STATUS(s);
+
+			if (blockMap.TryGetValue(st.BlockID, out Block b))
+			{
+				b.Mark(st.TileMap);
+
+				if (st.TileCount == b.TileCount || b.IsComplete)
+				{
+					blockMap.TryRemove(st.BlockID, out Block rem);
+					b.Dispose();
+				}
+				else
+				{
+					// Send the non marked tiles
+
+				}
+			}
+		}
+
+		void procAskStatus(Span<byte> s)
+		{
+			var st = new STATUS(s);
+
+			if (blockMap.TryGetValue(st.BlockID, out Block b))
+			{
+				Span<byte> map = stackalloc byte[b.tileMap.Bytes];
+
+				b.tileMap.WriteTo(map);
+				status(false, st.BlockID, b.MarkedTiles, map);
+			}
+			else status(false, st.BlockID, 0, null);
+		}
+
+		void procSignal(Span<byte> s)
+		{
+			var sg = new SIGNAL(s);
+
+			if (signalAwaits.TryGetValue(sg.RefID, out SignalAwait sa) && sa.OnSignal != null)
+				try { sa.OnSignal(sg.Mark); }
+				catch { }
+		}
+
+		async Task<bool> reqack(Block b, int n, int delayMS)
+		{
+			await Task.Run(() =>
+			{
+				var fid = Interlocked.Increment(ref frameCounter);
+				var opt = (byte)FrameOptions.ReqAckBlockTransfer;
+				var frame = new FRAME(fid, b.ID, b.TileCount, 0, b.TileSize, opt, null);
+				Span<byte> s = stackalloc byte[frame.LENGTH];
+
+				frame.Write(s);
+				Interlocked.Exchange(ref b.reqAckDgram, s.ToArray());
+			});
+
+			for (int i = 0; i < n; i++)
+			{
+				var dgram = Volatile.Read(ref b.reqAckDgram);
+
+				if (dgram != null)
+				{
+					await socket.SendAsync(dgram, SocketFlags.None);
+					await Task.Delay(delayMS);
+				}
+				else return true;
+			}
+
+			Volatile.Write(ref b.reqAckDgram, null);
+
+			return false;
+		}
+
+		async Task probe()
+		{
+			while (Volatile.Read(ref stop) < 1)
+				try
+				{
+					socket.Send(probeLead);
+					await Task.Delay(cfg.ProbeFreqMS);
+				}
+				catch (Exception ex)
+				{
+					Interlocked.Exchange(ref exception, ex);
+					Interlocked.Exchange(ref stop, 1);
+				}
 		}
 
 		async Task receive()
@@ -122,130 +303,59 @@ namespace brays
 					using (var f = highway.Alloc(UDP_MAX))
 					{
 						var read = await socket.ReceiveAsync(f, SocketFlags.None);
-						if (read > 0) processFrame(f.Span());
+						if (read > 0) new Task(() => procFrame(f.Span())).Start();
+						else if (Interlocked.Increment(ref retries) > cfg.MaxRetries) break;
+						else await Task.Delay(cfg.ErrorAwaitMS);
 					}
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine(ex.Message);
+					Interlocked.Exchange(ref exception, ex);
+					Interlocked.Exchange(ref stop, 1);
 				}
 		}
 
-		void processFrame(Span<byte> s)
+		async Task cleanup()
 		{
-			var lead = (Lead)s[0];
-
-			switch (lead)
+			while (true)
 			{
-				case Lead.Probe:
-				{
-					Volatile.Write(ref lastProbeTick, DateTime.Now.Ticks);
-					Probe();
-					break;
-				}
-				case Lead.Signal:
-				{
-					var sg = new SIGNAL(s.Slice(1));
+				foreach (var b in blockMap.Values)
+					if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
+						blockMap.TryRemove(b.ID, out Block x);
 
-					if (refAwaits.TryGetValue(sg.RefID, out Action<int> a))
-						try { a(sg.Mark); }
-						catch { }
+				foreach (var sa in signalAwaits)
+					if (sa.Value.OnSignal != null && DateTime.Now.Subtract(sa.Value.Created) > cfg.SignalAwait)
+						signalAwaits.TryRemove(sa.Key, out SignalAwait x);
 
-					break;
-				}
-				case Lead.Block:
-				{
-					var f = new FRAME(s.Slice(1));
-
-					// [!] Handle the case when the last tile is received first
-					// and the Length would be wrong.
-					if (!blockMap.ContainsKey(f.BlockID))
-						blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TileCount, f.Length, highway));
-
-					var b = blockMap[f.BlockID];
-
-					b.Receive(f);
-
-					if (b.IsComplete)
-						Task.Run(() =>
-						{
-							try
-							{
-								onReceived(b);
-							}
-							catch { }
-						});
-
-					break;
-				}
-				case Lead.AskTile:
-				{
-					var f = new FRAME(s.Slice(1));
-
-					if (blockMap.ContainsKey(f.BlockID) &&
-						blockMap.TryGetValue(f.BlockID, out Block b)) beam(b, f.TileIndex);
-					else signal((byte)Lead.Signal, f.BlockID, (int)SignalKind.NACK);
-
-					break;
-				}
-				case Lead.AskBlock:
-				{
-					var f = new FRAME(s.Slice(1));
-
-					if (blockMap.ContainsKey(f.BlockID) &&
-						blockMap.TryGetValue(f.BlockID, out Block b)) beam(b);
-					else signal((byte)Lead.Signal, f.BlockID, (int)SignalKind.NACK);
-
-					break;
-				}
-				case Lead.AskStatus:
-				{
-					var st = new STATUS(s.Slice(1));
-
-					if (blockMap.TryGetValue(st.BlockID, out Block b))
-						status(false, st.BlockID, b.MarkedTiles, b.MarkedLine());
-					else status(false, st.BlockID, 0, 0);
-
-					break;
-				}
-				case Lead.Status:
-				{
-					var st = new STATUS(s.Slice(1));
-
-					if (blockMap.TryGetValue(st.BlockID, out Block b))
-					{
-						b.Mark(st.TileIndex, true);
-
-						if (st.TileCount == b.TileCount || b.IsComplete)
-						{
-							blockMap.TryRemove(st.BlockID, out Block rem);
-							b.Dispose();
-						}
-					}
-
-					break;
-				}
-				default:
-				break;
+				await Task.Delay(cfg.CleanupFreqMS);
 			}
 		}
 
 
 		Action<Block> onReceived;
+
 		HeapHighway highway;
 		EmitterCfg cfg;
 		IPEndPoint target;
 		IPEndPoint source;
 		Socket socket;
-		int frameCounter;
-		int stop;
-		bool isLocked;
-		long lastProbeTick;
-		Task receiver;
 
-		ConcurrentDictionary<int, Action<int>> refAwaits = new ConcurrentDictionary<int, Action<int>>();
+		int frameCounter;
+		int blockCounter;
+		int stop;
+		int retries;
+		bool isLocked;
+		long lastReceivedProbeTick;
+		byte[] probeLead = new byte[] { (byte)Lead.Probe };
+
+		Exception exception;
+		Task probingTask;
+		Task receiveTask;
+		Task cleanupTask;
+
+		ConcurrentDictionary<int, SignalAwait> signalAwaits = new ConcurrentDictionary<int, SignalAwait>();
 		ConcurrentDictionary<int, Block> blockMap = new ConcurrentDictionary<int, Block>();
 
-		ushort UDP_MAX = ushort.MaxValue;
+		public const ushort UDP_MAX = ushort.MaxValue;
 	}
 }
