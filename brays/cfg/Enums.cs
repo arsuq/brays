@@ -8,7 +8,6 @@ namespace brays
 		Error,
 		Block,
 		Status,
-		AskStatus
 	}
 
 	enum SignalKind : int

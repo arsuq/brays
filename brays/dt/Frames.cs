@@ -88,9 +88,9 @@ namespace brays
 
 	readonly ref struct STATUS
 	{
-		public STATUS(bool ask, int fid, int bid, int tc, Span<byte> s)
+		public STATUS(int fid, int bid, int tc, Span<byte> s)
 		{
-			Kind = ask ? (byte)Lead.AskStatus : (byte)Lead.Status;
+			Kind = (byte)Lead.Status;
 			FrameID = fid;
 			BlockID = bid;
 			TileCount = tc;
@@ -115,9 +115,9 @@ namespace brays
 			TileMap.CopyTo(s.Slice(13));
 		}
 
-		public static void Make(bool ask, int fid, int bid, int tc, Span<byte> map, Span<byte> s)
+		public static void Make(int fid, int bid, int tc, Span<byte> map, Span<byte> s)
 		{
-			s[0] = ask ? (byte)Lead.AskStatus : (byte)Lead.Status;
+			s[0] = (byte)Lead.Status;
 			BitConverter.TryWriteBytes(s.Slice(1), fid);
 			BitConverter.TryWriteBytes(s.Slice(5), bid);
 			BitConverter.TryWriteBytes(s.Slice(9), tc);

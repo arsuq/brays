@@ -85,49 +85,32 @@ namespace brays
 			if (b == null) throw new ArgumentNullException();
 			if (cfg.TileSize != b.TileSize) throw new ArgumentException("TileSize mismatch");
 
-			var size = cfg.TileSize;
-			var count = b.Fragment.Length / size;
+			int sent = 0;
 
-			if (b.Fragment.Length % size != 0) count++;
+			for (int i = 0; i < b.tileMap.Length; i++)
+				if (!b.tileMap[i])
+					using (var mf = highway.Alloc(b.TileSize + 50))
+					{
+						var s = b.Fragment.Span().Slice(i * b.TileSize);
+						var fid = Interlocked.Increment(ref frameCounter);
+						var f = new FRAME(fid, b.ID, b.TileCount, i, (ushort)s.Length, 0, s);
 
-			for (int i = 0; i < count; i++)
-				using (var mf = highway.Alloc(size))
-				{
-					var s = b.Fragment.Span().Slice(i * size);
-					var fid = Interlocked.Increment(ref frameCounter);
-					var f = new FRAME(fid, b.ID, count, i, (ushort)s.Length, 0, s);
-
-					f.Write(mf.Span());
-					socket.Send(mf);
-				}
+						f.Write(mf.Span());
+						socket.Send(mf);
+						sent++;
+					}
 
 			b.sentTime = DateTime.Now;
-			status(true, b.ID, count, null);
+			status(b.ID, sent, null);
 		}
 
-		void beam(Block b, int tileIdx)
-		{
-			if (b == null) throw new ArgumentNullException();
-			if (cfg.TileSize != b.TileSize) throw new ArgumentException("TileSize mismatch");
-
-			using (var mf = highway.Alloc(b.TileSize + 50))
-			{
-				var s = b.Fragment.Span().Slice(tileIdx * b.TileSize);
-				var fid = Interlocked.Increment(ref frameCounter);
-				var f = new FRAME(fid, b.ID, b.TileCount, tileIdx, (ushort)s.Length, 0, s);
-
-				f.Write(mf.Span());
-				socket.Send(mf);
-			}
-		}
-
-		void status(bool ask, int blockID, int tilesCount, Span<byte> tileMap)
+		void status(int blockID, int tilesCount, Span<byte> tileMap)
 		{
 			var fid = Interlocked.Increment(ref frameCounter);
 			var len = tileMap.Length + 13;
 			Span<byte> s = stackalloc byte[len];
 
-			STATUS.Make(ask, fid, blockID, tilesCount, tileMap, s);
+			STATUS.Make(fid, blockID, tilesCount, tileMap, s);
 			socket.Send(s);
 		}
 
@@ -153,7 +136,6 @@ namespace brays
 					case Lead.Signal: procSignal(s); break;
 					case Lead.Error: procError(s); break;
 					case Lead.Block: procBlock(s); break;
-					case Lead.AskStatus: procAskStatus(s); break;
 					case Lead.Status: procStatus(s); break;
 					default:
 					break;
@@ -195,7 +177,7 @@ namespace brays
 				{
 					try
 					{
-						onReceived(b);
+						onReceived(b.Fragment);
 					}
 					catch { }
 				});
@@ -212,33 +194,26 @@ namespace brays
 
 			if (blockMap.TryGetValue(st.BlockID, out Block b))
 			{
-				b.Mark(st.TileMap);
-
-				if (st.TileCount == b.TileCount || b.IsComplete)
+				if (b.IsIncoming)
 				{
-					blockMap.TryRemove(st.BlockID, out Block rem);
-					b.Dispose();
+					Span<byte> map = stackalloc byte[b.tileMap.Bytes];
+
+					b.tileMap.WriteTo(map);
+					status(st.BlockID, b.MarkedTiles, map);
 				}
 				else
 				{
-					// Send the non marked tiles
+					b.Mark(st.TileMap);
 
+					if (st.TileCount == b.TileCount || b.IsComplete)
+					{
+						blockMap.TryRemove(st.BlockID, out Block rem);
+						b.Dispose();
+					}
+					else beam(b);
 				}
 			}
-		}
-
-		void procAskStatus(Span<byte> s)
-		{
-			var st = new STATUS(s);
-
-			if (blockMap.TryGetValue(st.BlockID, out Block b))
-			{
-				Span<byte> map = stackalloc byte[b.tileMap.Bytes];
-
-				b.tileMap.WriteTo(map);
-				status(false, st.BlockID, b.MarkedTiles, map);
-			}
-			else status(false, st.BlockID, 0, null);
+			else signal(st.FrameID, (int)SignalKind.UNK);
 		}
 
 		void procSignal(Span<byte> s)
@@ -331,8 +306,7 @@ namespace brays
 			}
 		}
 
-
-		Action<Block> onReceived;
+		Action<MemoryFragment> onReceived;
 
 		HeapHighway highway;
 		EmitterCfg cfg;
