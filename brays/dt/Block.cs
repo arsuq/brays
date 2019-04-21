@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace brays
 {
-	public class Block : IDisposable
+	class Block : IDisposable
 	{
 		public Block(int id, ushort tileSize, MemoryFragment frag)
 		{

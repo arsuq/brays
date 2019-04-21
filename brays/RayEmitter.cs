@@ -13,19 +13,21 @@ namespace brays
 		{
 			if (onReceived == null || cfg == null) throw new ArgumentNullException();
 
-			highway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
+			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			this.cfg = cfg;
+			inHighway = cfg.ReceiveHighway;
 		}
 
 		public void Dispose()
 		{
-			if (highway != null)
+			if (outHighway != null)
 				try
 				{
 					Interlocked.Exchange(ref stop, 1);
-					highway.Dispose();
+					outHighway.Dispose();
+					inHighway.Dispose();
 					socket.Dispose();
-					highway = null;
+					outHighway = null;
 				}
 				catch { }
 		}
@@ -57,14 +59,14 @@ namespace brays
 			Volatile.Write(ref isLocked, true);
 		}
 
-		public async Task<bool> Beam(MemoryFragment f, int reqAckRetries = 4, int reqAckDelayMS = 1200)
+		public async Task<bool> Beam(MemoryFragment f)
 		{
 			var bid = Interlocked.Increment(ref blockCounter);
 			var b = new Block(bid, cfg.TileSize, f);
 
 			if (blockMap.TryAdd(bid, b))
 			{
-				if (b.TileCount > 1 && !await reqack(b, reqAckRetries, reqAckDelayMS))
+				if (b.TileCount > 1 && !reqack(b))
 					return false;
 
 				await Task.Run(() => beam(b));
@@ -77,6 +79,7 @@ namespace brays
 		public bool IsLocked => isLocked;
 		public int FrameCounter => frameCounter;
 		public IPEndPoint Target => target;
+		public IPEndPoint Source => source;
 		public DateTime LastProbe => new DateTime(Volatile.Read(ref lastReceivedProbeTick));
 		public Exception Exception => exception;
 
@@ -89,7 +92,7 @@ namespace brays
 
 			for (int i = 0; i < b.tileMap.Length; i++)
 				if (!b.tileMap[i])
-					using (var mf = highway.Alloc(b.TileSize + 50))
+					using (var mf = outHighway.Alloc(b.TileSize + 50))
 					{
 						var s = b.Fragment.Span().Slice(i * b.TileSize);
 						var fid = Interlocked.Increment(ref frameCounter);
@@ -104,14 +107,35 @@ namespace brays
 			status(b.ID, sent, null);
 		}
 
-		void status(int blockID, int tilesCount, Span<byte> tileMap)
+		bool status(int blockID, int tilesCount, Span<byte> tileMap)
 		{
+			var rst = new ManualResetEventSlim(false);
 			var fid = Interlocked.Increment(ref frameCounter);
 			var len = tileMap.Length + 13;
-			Span<byte> s = stackalloc byte[len];
+			var rsp = false;
 
-			STATUS.Make(fid, blockID, tilesCount, tileMap, s);
-			socket.Send(s);
+			using (var frag = outHighway.Alloc(len))
+			{
+				STATUS.Make(fid, blockID, tilesCount, tileMap, frag.Span());
+
+				var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
+				{
+					if ((SignalKind)mark == SignalKind.ACK)
+						rsp = true;
+
+					signalAwaits.TryRemove(fid, out SignalAwait x);
+					rst.Set();
+				}));
+
+				if (ackq)
+					for (int i = 0; i < cfg.SendRetries; i++)
+					{
+						socket.Send(frag, SocketFlags.None);
+						if (rst.Wait(cfg.RetryDelayMS)) return rsp;
+					}
+
+				return false;
+			}
 		}
 
 		void signal(int refID, int mark, bool isError = false)
@@ -124,40 +148,40 @@ namespace brays
 			socket.Send(s);
 		}
 
-		void procFrame(Span<byte> s)
+		void procFrame(MemoryFragment f)
 		{
 			try
 			{
-				var lead = (Lead)s[0];
+				var lead = (Lead)f.Span()[0];
 
 				switch (lead)
 				{
 					case Lead.Probe: Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks); break;
-					case Lead.Signal: procSignal(s); break;
-					case Lead.Error: procError(s); break;
-					case Lead.Block: procBlock(s); break;
-					case Lead.Status: procStatus(s); break;
+					case Lead.Signal: procSignal(f); break;
+					case Lead.Error: procError(f); break;
+					case Lead.Block: procBlock(f); break;
+					case Lead.Status: procStatus(f); break;
 					default:
 					break;
 				}
 			}
 			catch (Exception ex)
 			{
-				// log
 			}
+			finally { f.Dispose(); }
 		}
 
-		void procBlock(Span<byte> s)
+		void procBlock(MemoryFragment frag)
 		{
-			var f = new FRAME(s);
+			var f = new FRAME(frag.Span());
 
 			if (!blockMap.ContainsKey(f.BlockID))
 			{
 				// If it's just one tile there is no need of ReqAck
-				if (f.TileCount == 1)
+				if (f.TileCount == 1 || f.Options == (byte)FrameOptions.ReqAckBlockTransfer)
 				{
 					if (!blockMap.ContainsKey(f.BlockID))
-						blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TileCount, f.Length, highway));
+						blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TileCount, f.Length, inHighway));
 
 					signal(f.FrameID, (int)SignalKind.ACK);
 				}
@@ -183,14 +207,14 @@ namespace brays
 				});
 		}
 
-		void procError(Span<byte> s)
+		void procError(MemoryFragment frag)
 		{
-			var sg = new SIGNAL(s);
+			var sg = new SIGNAL(frag.Span());
 		}
 
-		void procStatus(Span<byte> s)
+		void procStatus(MemoryFragment frag)
 		{
-			var st = new STATUS(s);
+			var st = new STATUS(frag.Span());
 
 			if (blockMap.TryGetValue(st.BlockID, out Block b))
 			{
@@ -216,43 +240,62 @@ namespace brays
 			else signal(st.FrameID, (int)SignalKind.UNK);
 		}
 
-		void procSignal(Span<byte> s)
+		void procSignal(MemoryFragment frag)
 		{
-			var sg = new SIGNAL(s);
+			var sg = new SIGNAL(frag.Span());
 
 			if (signalAwaits.TryGetValue(sg.RefID, out SignalAwait sa) && sa.OnSignal != null)
 				try { sa.OnSignal(sg.Mark); }
 				catch { }
 		}
 
-		async Task<bool> reqack(Block b, int n, int delayMS)
+		bool reqack(Block b)
 		{
-			await Task.Run(() =>
+			var rst = new ManualResetEventSlim(false);
+			var fid = Interlocked.Increment(ref frameCounter);
+			var opt = (byte)FrameOptions.ReqAckBlockTransfer;
+			var frm = new FRAME(fid, b.ID, b.TileCount, 0, b.TileSize, opt, null);
+			var rsp = false;
+			Span<byte> s = stackalloc byte[frm.LENGTH];
+
+			var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 			{
-				var fid = Interlocked.Increment(ref frameCounter);
-				var opt = (byte)FrameOptions.ReqAckBlockTransfer;
-				var frame = new FRAME(fid, b.ID, b.TileCount, 0, b.TileSize, opt, null);
-				Span<byte> s = stackalloc byte[frame.LENGTH];
-
-				frame.Write(s);
-				Interlocked.Exchange(ref b.reqAckDgram, s.ToArray());
-			});
-
-			for (int i = 0; i < n; i++)
-			{
-				var dgram = Volatile.Read(ref b.reqAckDgram);
-
-				if (dgram != null)
+				if ((SignalKind)mark == SignalKind.ACK)
 				{
-					await socket.SendAsync(dgram, SocketFlags.None);
-					await Task.Delay(delayMS);
+					Volatile.Write(ref b.reqAckDgram, null);
+					rsp = true;
 				}
-				else return true;
+
+				signalAwaits.TryRemove(fid, out SignalAwait x);
+				rst.Set();
+			}));
+
+			if (ackq)
+			{
+				frm.Write(s);
+				Volatile.Write(ref b.reqAckDgram, s.ToArray());
+
+				for (int i = 0; i < cfg.SendRetries; i++)
+				{
+					var dgram = Volatile.Read(ref b.reqAckDgram);
+
+					if (dgram != null)
+					{
+						socket.Send(dgram, SocketFlags.None);
+						if (rst.Wait(cfg.RetryDelayMS)) return rsp;
+					}
+					else return rsp;
+				}
+
+				Volatile.Write(ref b.reqAckDgram, null);
 			}
 
-			Volatile.Write(ref b.reqAckDgram, null);
-
 			return false;
+		}
+
+		void suggestTileSize()
+		{
+
 		}
 
 		async Task probe()
@@ -263,11 +306,7 @@ namespace brays
 					socket.Send(probeLead);
 					await Task.Delay(cfg.ProbeFreqMS);
 				}
-				catch (Exception ex)
-				{
-					Interlocked.Exchange(ref exception, ex);
-					Interlocked.Exchange(ref stop, 1);
-				}
+				catch { }
 		}
 
 		async Task receive()
@@ -275,13 +314,16 @@ namespace brays
 			while (Volatile.Read(ref stop) < 1)
 				try
 				{
-					using (var f = highway.Alloc(UDP_MAX))
+					var f = outHighway.Alloc(UDP_MAX);
+					var read = await socket.ReceiveAsync(f, SocketFlags.None);
+					if (read > 0)
 					{
-						var read = await socket.ReceiveAsync(f, SocketFlags.None);
-						if (read > 0) new Task(() => procFrame(f.Span())).Start();
-						else if (Interlocked.Increment(ref retries) > cfg.MaxRetries) break;
-						else await Task.Delay(cfg.ErrorAwaitMS);
+						if (read == 1) procFrame(f);
+						else new Task(() => procFrame(f)).Start();
+						if (Volatile.Read(ref retries) > 0) Volatile.Write(ref retries, 0);
 					}
+					else if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
+					else await Task.Delay(cfg.ErrorAwaitMS);
 				}
 				catch (Exception ex)
 				{
@@ -308,7 +350,8 @@ namespace brays
 
 		Action<MemoryFragment> onReceived;
 
-		HeapHighway highway;
+		HeapHighway outHighway;
+		IMemoryHighway inHighway;
 		EmitterCfg cfg;
 		IPEndPoint target;
 		IPEndPoint source;
