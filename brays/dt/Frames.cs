@@ -24,8 +24,8 @@ namespace brays
 			TileCount = BitConverter.ToInt32(s.Slice(9));
 			TileIndex = BitConverter.ToInt32(s.Slice(13));
 			Length = BitConverter.ToUInt16(s.Slice(17));
-			Options = s[21];
-			Data = s.Slice(22);
+			Options = s[19];
+			Data = s.Slice(20);
 		}
 
 		public void Write(Span<byte> s)
@@ -36,8 +36,8 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(9), TileCount);
 			BitConverter.TryWriteBytes(s.Slice(13), TileIndex);
 			BitConverter.TryWriteBytes(s.Slice(17), Length);
-			s[21] = Options;
-			Data.CopyTo(s.Slice(22));
+			s[19] = Options;
+			Data.CopyTo(s.Slice(20));
 		}
 
 		public readonly byte Kind;

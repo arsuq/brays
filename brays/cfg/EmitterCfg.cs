@@ -17,6 +17,7 @@ namespace brays
 		public int SendRetries = 2;
 		public int RetryDelayMS = 800;
 		public int CleanupFreqMS = 8000;
+		public TimeSpan ProcessedFramesIDRetention = new TimeSpan(0, 10, 0);
 		public TimeSpan SentBlockRetention = new TimeSpan(0, 0, 30);
 		public TimeSpan SignalAwait = new TimeSpan(0, 0, 30);
 		public IMemoryHighway ReceiveHighway;

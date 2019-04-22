@@ -26,24 +26,34 @@ namespace brays.tests
 			{
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
-				var rayA = new RayEmitter((f) => { }, new EmitterCfg());
-				var rayB = new RayEmitter((f) => { }, new EmitterCfg());
+				var rayA = new RayEmitter((f) => { Console.WriteLine(f.Span()[0]); }, new EmitterCfg());
+				var rayB = new RayEmitter((f) => { Console.WriteLine(f.Span()[0]); }, new EmitterCfg());
 
-				var ta = new Task(() =>
+				using (var hw = new HeapHighway(50))
 				{
-					rayA.LockOn(aep, bep);
-				});
+					var ta = new Task(async () =>
+					{
+						rayA.LockOn(aep, bep);
 
-				var tb = new Task(() =>
-				{
-					rayB.LockOn(bep, aep);
-				});
+						using (var f = hw.Alloc(1))
+						{
+							f.Write(true, 0);
+							await rayA.Beam(f);
+						}
+					});
 
-				ta.Start();
-				tb.Start();
+					var tb = new Task(() =>
+					{
+						rayB.LockOn(bep, aep);
+					});
+
+					ta.Start();
+					tb.Start();
+
+					Task.WaitAll(ta, tb);
+				}
 
 				Console.ReadLine();
-
 				Passed = true;
 				IsComplete = true;
 			}

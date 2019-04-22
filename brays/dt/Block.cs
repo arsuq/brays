@@ -50,7 +50,10 @@ namespace brays
 
 				if (!tileMap[f.TileIndex])
 				{
-					f.Data.CopyTo(fragment.Span().Slice(f.TileIndex * TileSize));
+					var src = f.Data.Slice(0, f.Length);
+					var dst = fragment.Span().Slice(f.TileIndex * TileSize);
+
+					src.CopyTo(dst);
 					tileMap[f.TileIndex] = true;
 					markedTiles++;
 				}
@@ -107,6 +110,7 @@ namespace brays
 		internal readonly BitMask tileMap;
 		internal byte[] reqAckDgram;
 		internal DateTime sentTime;
+		internal bool isFaulted;
 
 		int markedTiles;
 		object sync = new object();

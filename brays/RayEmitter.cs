@@ -13,8 +13,9 @@ namespace brays
 		{
 			if (onReceived == null || cfg == null) throw new ArgumentNullException();
 
-			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
+			this.onReceived = onReceived;
 			this.cfg = cfg;
+			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			inHighway = cfg.ReceiveHighway;
 		}
 
@@ -28,6 +29,7 @@ namespace brays
 					inHighway.Dispose();
 					socket.Dispose();
 					outHighway = null;
+					inHighway = null;
 				}
 				catch { }
 		}
@@ -99,7 +101,14 @@ namespace brays
 						var f = new FRAME(fid, b.ID, b.TileCount, i, (ushort)s.Length, 0, s);
 
 						f.Write(mf.Span());
-						socket.Send(mf);
+						var dgram = mf.Span().Slice(0, f.LENGTH);
+
+						if (socket.Send(dgram) < 1)
+						{
+							b.isFaulted = true;
+							return;
+						}
+
 						sent++;
 					}
 
@@ -175,6 +184,8 @@ namespace brays
 		{
 			var f = new FRAME(frag.Span());
 
+			if (!procFrames.TryAdd(f.FrameID, DateTime.Now)) return;
+
 			if (!blockMap.ContainsKey(f.BlockID))
 			{
 				// If it's just one tile there is no need of ReqAck
@@ -196,7 +207,7 @@ namespace brays
 
 			b.Receive(f);
 
-			if (b.IsComplete)
+			if (b.IsComplete && onReceived != null)
 				Task.Run(() =>
 				{
 					try
@@ -210,11 +221,16 @@ namespace brays
 		void procError(MemoryFragment frag)
 		{
 			var sg = new SIGNAL(frag.Span());
+
+			if (!procFrames.TryAdd(sg.FrameID, DateTime.Now)) return;
+
 		}
 
 		void procStatus(MemoryFragment frag)
 		{
 			var st = new STATUS(frag.Span());
+
+			if (!procFrames.TryAdd(st.FrameID, DateTime.Now)) return;
 
 			if (blockMap.TryGetValue(st.BlockID, out Block b))
 			{
@@ -243,6 +259,8 @@ namespace brays
 		void procSignal(MemoryFragment frag)
 		{
 			var sg = new SIGNAL(frag.Span());
+
+			if (!procFrames.TryAdd(sg.FrameID, DateTime.Now)) return;
 
 			if (signalAwaits.TryGetValue(sg.RefID, out SignalAwait sa) && sa.OnSignal != null)
 				try { sa.OnSignal(sg.Mark); }
@@ -314,16 +332,21 @@ namespace brays
 			while (Volatile.Read(ref stop) < 1)
 				try
 				{
-					var f = outHighway.Alloc(UDP_MAX);
-					var read = await socket.ReceiveAsync(f, SocketFlags.None);
+					var f = inHighway.AllocFragment(UDP_MAX);
+					var read = socket.Receive(f, SocketFlags.None);
 					if (read > 0)
 					{
 						if (read == 1) procFrame(f);
 						else new Task(() => procFrame(f)).Start();
 						if (Volatile.Read(ref retries) > 0) Volatile.Write(ref retries, 0);
 					}
-					else if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
-					else await Task.Delay(cfg.ErrorAwaitMS);
+					else
+					{
+						f.Dispose();
+
+						if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
+						else await Task.Delay(cfg.ErrorAwaitMS);
+					}
 				}
 				catch (Exception ex)
 				{
@@ -336,14 +359,23 @@ namespace brays
 		{
 			while (true)
 			{
-				foreach (var b in blockMap.Values)
-					if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
-						blockMap.TryRemove(b.ID, out Block x);
+				try
+				{
+					foreach (var b in blockMap.Values)
+						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
+							blockMap.TryRemove(b.ID, out Block x);
 
-				foreach (var sa in signalAwaits)
-					if (sa.Value.OnSignal != null && DateTime.Now.Subtract(sa.Value.Created) > cfg.SignalAwait)
-						signalAwaits.TryRemove(sa.Key, out SignalAwait x);
+					foreach (var sa in signalAwaits)
+						if (sa.Value.OnSignal != null && DateTime.Now.Subtract(sa.Value.Created) > cfg.SignalAwait)
+							signalAwaits.TryRemove(sa.Key, out SignalAwait x);
 
+					var DTN = DateTime.Now;
+
+					foreach (var fi in procFrames)
+						if (DTN.Subtract(fi.Value) > cfg.ProcessedFramesIDRetention)
+							procFrames.TryRemove(fi.Key, out DateTime x);
+				}
+				catch { }
 				await Task.Delay(cfg.CleanupFreqMS);
 			}
 		}
@@ -372,6 +404,7 @@ namespace brays
 
 		ConcurrentDictionary<int, SignalAwait> signalAwaits = new ConcurrentDictionary<int, SignalAwait>();
 		ConcurrentDictionary<int, Block> blockMap = new ConcurrentDictionary<int, Block>();
+		ConcurrentDictionary<int, DateTime> procFrames = new ConcurrentDictionary<int, DateTime>();
 
 		public const ushort UDP_MAX = ushort.MaxValue;
 	}
