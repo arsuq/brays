@@ -8,6 +8,8 @@ namespace brays.tests
 		static void Main(string[] args)
 		{
 			new Runner().Run(args);
+
+			Console.ReadLine();
 		}
 	}
 }

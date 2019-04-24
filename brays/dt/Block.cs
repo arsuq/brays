@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace brays
 {
@@ -10,22 +11,28 @@ namespace brays
 			ID = id;
 			fragment = frag;
 			TileSize = tileSize;
-			TileCount = frag.Length / tileSize;
+			TotalSize = frag.Length;
+			TilesCount = frag.Length / tileSize;
 
-			if (frag.Length % tileSize != 0)
-				TileCount++;
+			if (TotalSize > tileSize && frag.Length % tileSize != 0) TilesCount++;
+			if (TilesCount == 0) TilesCount = 1;
 
-			tileMap = new BitMask(TileCount);
+			tileMap = new BitMask(TilesCount);
 		}
 
-		public Block(int id, int tileCount, ushort tileSize, IMemoryHighway hw)
+		public Block(int id, int totalSize, ushort tileSize, IMemoryHighway hw)
 		{
 			ID = id;
 			TileSize = tileSize;
-			TileCount = tileCount;
+			TotalSize = totalSize;
+			TilesCount = totalSize / tileSize;
+
+			if (TotalSize > tileSize && TotalSize % tileSize != 0) TilesCount++;
+			if (TilesCount == 0) TilesCount = 1;
+
 			IsIncoming = true;
-			fragment = hw.AllocFragment(tileSize * tileCount);
-			tileMap = new BitMask(TileCount);
+			fragment = hw.AllocFragment(totalSize);
+			tileMap = new BitMask(TilesCount);
 		}
 
 		public bool this[int index]
@@ -46,16 +53,18 @@ namespace brays
 		{
 			lock (sync)
 			{
-				if (f.TileCount != TileCount) throw new Exception();
+				if (f.TotalSize != TotalSize) throw new ArgumentException();
 
 				if (!tileMap[f.TileIndex])
 				{
-					var src = f.Data.Slice(0, f.Length);
+					var size = f.TotalSize < f.Length ? f.TotalSize : f.Length;
+					var src = f.Data.Slice(0, size);
 					var dst = fragment.Span().Slice(f.TileIndex * TileSize);
 
 					src.CopyTo(dst);
 					tileMap[f.TileIndex] = true;
 					markedTiles++;
+					Interlocked.Exchange(ref lastReceivedTileTick, DateTime.Now.Ticks);
 				}
 			}
 		}
@@ -83,14 +92,14 @@ namespace brays
 
 		internal void Mark(Span<byte> mask)
 		{
-			if (mask != null) return;
+			if (mask.Length == 0) return;
 
 			lock (sync)
 			{
-				var B = new BitMask(mask);
+				var B = new BitMask(mask, TilesCount);
 
-				for (int i = 0; i < mask.Length; i++)
-					if (B[i])
+				for (int i = 0; i < TilesCount; i++)
+					if (B[i] && !tileMap[i])
 					{
 						tileMap[i] = true;
 						markedTiles++;
@@ -98,19 +107,27 @@ namespace brays
 			}
 		}
 
+		internal bool shouldReqTiles(int gapMS) =>
+			new TimeSpan(DateTime.Now.Ticks - lastReceivedTileTick).TotalMilliseconds > gapMS;
+
 		public MemoryFragment Fragment => fragment;
 		public int MarkedTiles => Volatile.Read(ref markedTiles);
-		public bool IsComplete => MarkedTiles == TileCount;
+		public bool IsComplete => MarkedTiles == TilesCount;
 
 		public readonly int ID;
-		public readonly int TileCount;
+		public readonly int TotalSize;
+		public readonly int TilesCount;
 		public readonly ushort TileSize;
 		public readonly bool IsIncoming;
 
 		internal readonly BitMask tileMap;
 		internal byte[] reqAckDgram;
 		internal DateTime sentTime;
+		internal long lastReceivedTileTick;
 		internal bool isFaulted;
+		internal int isOnCompleteTriggered;
+
+		internal Task requestTiles;
 
 		int markedTiles;
 		object sync = new object();

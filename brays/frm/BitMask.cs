@@ -1,21 +1,22 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 
 namespace brays
 {
 	public class BitMask
 	{
-		public BitMask(int length)
+		public BitMask(int count)
 		{
-			if (length < 0) throw new ArgumentOutOfRangeException();
+			if (count < 0) throw new ArgumentOutOfRangeException();
 
-			if (length > 32)
+			if (count > 32)
 			{
-				var count = length >> 5;
-				if ((length & 5) != 0) count++;
-				tiles = new int[count];
-				Bytes = count;
+				var c = count >> 5;
+				if ((count & 5) != 0) c++;
+				tiles = new int[c];
+				Bytes = c;
 			}
 			else
 			{
@@ -23,28 +24,32 @@ namespace brays
 				Bytes = 4;
 			}
 
-			Length = length;
+			Count = count;
 		}
 
-		public BitMask(Span<byte> s)
+		public BitMask(Span<byte> s, int count)
 		{
-			var len = s.Length / 4;
-			if (len % 4 != 0) len++;
+			if (count > s.Length * 8) throw new ArgumentException();
+
+			var len = count / 32;
+			if (len % 32 != 0) len++;
+			if (len == 0) len = 1;
 
 			tiles = new int[len];
-			s.CopyTo(MemoryMarshal.AsBytes<int>(tiles));
+			s.Slice(0, len * 4).CopyTo(MemoryMarshal.AsBytes<int>(tiles));
 		}
 
-		public BitMask(Span<int> s)
+		public BitMask(Span<int> s, int count)
 		{
 			tiles = s.ToArray();
+			Count = count;
 		}
 
 		public bool this[int index]
 		{
 			get
 			{
-				if (index < 0 || index >= tiles.Length) throw new ArgumentOutOfRangeException();
+				if (index < 0 || index >= tiles.Length * 32) throw new ArgumentOutOfRangeException();
 
 				var pos = index >> 5;
 				var v = Volatile.Read(ref tiles[pos]);
@@ -54,7 +59,7 @@ namespace brays
 			}
 			set
 			{
-				if (index < 0 || index >= tiles.Length) throw new ArgumentOutOfRangeException();
+				if (index < 0 || index >= tiles.Length * 32) throw new ArgumentOutOfRangeException();
 
 				lock (wsync)
 				{
@@ -78,12 +83,30 @@ namespace brays
 
 		public void WriteTo(Span<int> s)
 		{
-			if (s.Length < Length) throw new ArgumentException();
+			if (s.Length < Count) throw new ArgumentException();
 
 			tiles.CopyTo(s);
 		}
 
-		public readonly int Length;
+		public bool IsComplete()
+		{
+			for (int i = 0; i < Count; i++)
+				if (!this[i]) return false;
+
+			return true;
+		}
+
+		public string ToBinaryString()
+		{
+			var sb = new StringBuilder();
+
+			foreach (var tile in tiles)
+				sb.Append(Convert.ToString(tile, 2));
+
+			return sb.ToString();
+		}
+
+		public readonly int Count;
 		public readonly int Bytes;
 		object wsync = new object();
 		int[] tiles;

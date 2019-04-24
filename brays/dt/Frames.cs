@@ -4,16 +4,17 @@ namespace brays
 {
 	readonly ref struct FRAME
 	{
-		public FRAME(int fid, int bid, int tc, int ti, ushort l, byte o, Span<byte> s)
+		public FRAME(int fid, int bid, int ts, int ti, ushort l, byte o, Span<byte> s)
 		{
 			Kind = (byte)Lead.Block;
 			FrameID = fid;
 			BlockID = bid;
-			TileCount = tc;
+			TotalSize = ts;
 			TileIndex = ti;
 			Length = l;
 			Options = o;
 			Data = s;
+			if (Data.Length > l) Data = Data.Slice(0, l);
 		}
 
 		public FRAME(Span<byte> s)
@@ -21,7 +22,7 @@ namespace brays
 			Kind = s[0];
 			FrameID = BitConverter.ToInt32(s.Slice(1));
 			BlockID = BitConverter.ToInt32(s.Slice(5));
-			TileCount = BitConverter.ToInt32(s.Slice(9));
+			TotalSize = BitConverter.ToInt32(s.Slice(9));
 			TileIndex = BitConverter.ToInt32(s.Slice(13));
 			Length = BitConverter.ToUInt16(s.Slice(17));
 			Options = s[19];
@@ -33,7 +34,7 @@ namespace brays
 			s[0] = Kind;
 			BitConverter.TryWriteBytes(s.Slice(1), FrameID);
 			BitConverter.TryWriteBytes(s.Slice(5), BlockID);
-			BitConverter.TryWriteBytes(s.Slice(9), TileCount);
+			BitConverter.TryWriteBytes(s.Slice(9), TotalSize);
 			BitConverter.TryWriteBytes(s.Slice(13), TileIndex);
 			BitConverter.TryWriteBytes(s.Slice(17), Length);
 			s[19] = Options;
@@ -43,7 +44,7 @@ namespace brays
 		public readonly byte Kind;
 		public readonly int FrameID;
 		public readonly int BlockID;
-		public readonly int TileCount;
+		public readonly int TotalSize;
 		public readonly int TileIndex;
 		public readonly ushort Length;
 		public readonly byte Options;
