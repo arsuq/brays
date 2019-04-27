@@ -49,7 +49,7 @@ namespace brays
 			}
 		}
 
-		internal void Receive(FRAME f)
+		internal bool Receive(FRAME f)
 		{
 			lock (sync)
 			{
@@ -65,7 +65,10 @@ namespace brays
 					tileMap[f.TileIndex] = true;
 					markedTiles++;
 					Interlocked.Exchange(ref lastReceivedTileTick, DateTime.Now.Ticks);
+
+					return true;
 				}
+				else return false;
 			}
 		}
 

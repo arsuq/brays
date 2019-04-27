@@ -191,7 +191,15 @@ namespace brays.tests
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 				rayA = new RayEmitter(
 					(f) => { Console.WriteLine("?"); },
-					new EmitterCfg() { Log = true, LogFilePath = "rayA" });
+					new EmitterCfg()
+					{
+						Log = true,
+						LogFilePath = "rayA",
+#if DEBUG
+						dropFrames = true,
+						deopFrameProb = 0.3
+#endif
+					});
 				rayB = new RayEmitter((f) =>
 				{
 					try

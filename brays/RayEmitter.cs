@@ -207,6 +207,54 @@ namespace brays
 			return sent;
 		}
 
+		bool reqack(Block b)
+		{
+			var rst = new ManualResetEventSlim(false);
+			var fid = Interlocked.Increment(ref frameCounter);
+			var opt = (byte)FrameOptions.ReqAckBlockTransfer;
+			var frm = new FRAME(fid, b.ID, b.TotalSize, 0, b.TileSize, opt, null);
+			var rsp = false;
+
+			var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
+			{
+				if ((SignalKind)mark == SignalKind.ACK)
+				{
+					Volatile.Write(ref b.reqAckDgram, null);
+					Volatile.Write(ref rsp, true);
+				}
+
+				signalAwaits.TryRemove(fid, out SignalAwait x);
+				rst.Set();
+			}));
+
+			if (ackq)
+			{
+				b.reqAckDgram = new byte[FRAME.HEADER];
+				frm.Write(b.reqAckDgram);
+
+				for (int i = 0; i < cfg.SendRetries; i++)
+					if (Volatile.Read(ref b.reqAckDgram) != null)
+					{
+						fid = Interlocked.Increment(ref frameCounter);
+						frm = new FRAME(fid, b.ID, b.TotalSize, 0, b.TileSize, opt, null);
+
+						frm.Write(b.reqAckDgram);
+						socket.Send(b.reqAckDgram, SocketFlags.None);
+
+						if (log != null)
+							traceOutFrame("ReqAck", frm.FrameID, $"B: {b.ID} Total: {b.TotalSize} Tile: {b.TileSize}, #{i + 1}");
+
+						if (rst.Wait(cfg.RetryDelayMS)) break;
+					}
+					else break;
+
+				Volatile.Write(ref b.reqAckDgram, null);
+			}
+
+			return Volatile.Read(ref rsp);
+
+		}
+
 		void procFrame(MemoryFragment f)
 		{
 			try
@@ -245,7 +293,12 @@ namespace brays
 				return;
 			}
 #endif
-			if (!procFrames.TryAdd(f.FrameID, DateTime.Now)) return;
+			if (!procFrames.TryAdd(f.FrameID, DateTime.Now))
+			{
+				if (log != null) traceInFrame("Clone", f.FrameID, string.Empty);
+				return;
+			}
+
 			if (!blockMap.ContainsKey(f.BlockID))
 			{
 				// If it's just one tile there is no need of ReqAck.
@@ -263,10 +316,23 @@ namespace brays
 					return;
 				}
 			}
+			else
+			{
+				signal(f.FrameID, (int)SignalKind.ACK);
+				if (f.Options == (byte)FrameOptions.ReqAckBlockTransfer)
+				{
+					if (log != null) traceInFrame("Clone REQACK", f.FrameID, null);
+					return;
+				}
+			}
 
 			var b = blockMap[f.BlockID];
 
-			b.Receive(f);
+			if (!b.Receive(f))
+			{
+				if (log != null) traceInFrame("Tile ignore", f.FrameID, $"B: {b.ID} T: {f.TileIndex}");
+				return;
+			}
 
 			if (log != null) traceInFrame("Block", f.FrameID, $"{f.Length} B:{f.BlockID} T: {f.TileIndex}");
 
@@ -342,7 +408,11 @@ namespace brays
 					}
 				}
 			}
-			else signal(st.FrameID, (int)SignalKind.UNK);
+			else
+			{
+				signal(st.FrameID, (int)SignalKind.UNK);
+				if (log != null) traceInFrame("InStatus", st.FrameID, $"[Unknown] B: {st.BlockID}");
+			}
 		}
 
 		void procSignal(MemoryFragment frag)
@@ -356,7 +426,12 @@ namespace brays
 				return;
 			}
 #endif
-			if (!procFrames.TryAdd(sg.FrameID, DateTime.Now)) return;
+			if (!procFrames.TryAdd(sg.FrameID, DateTime.Now))
+			{
+				if (log != null) traceInFrame("Clone", sg.FrameID, string.Empty);
+				return;
+			}
+
 			if (signalAwaits.TryGetValue(sg.RefID, out SignalAwait sa) && sa.OnSignal != null)
 				try
 				{
@@ -364,52 +439,7 @@ namespace brays
 					sa.OnSignal(sg.Mark);
 				}
 				catch { }
-		}
-
-		bool reqack(Block b)
-		{
-			var rst = new ManualResetEventSlim(false);
-			var fid = Interlocked.Increment(ref frameCounter);
-			var opt = (byte)FrameOptions.ReqAckBlockTransfer;
-			var frm = new FRAME(fid, b.ID, b.TotalSize, 0, b.TileSize, opt, null);
-			var rsp = false;
-
-			using (var frag = outHighway.Alloc(frm.LENGTH))
-			{
-				var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
-				{
-					if ((SignalKind)mark == SignalKind.ACK)
-					{
-						Volatile.Write(ref b.reqAckDgram, null);
-						Volatile.Write(ref rsp, true);
-					}
-
-					signalAwaits.TryRemove(fid, out SignalAwait x);
-					rst.Set();
-				}));
-
-				if (ackq)
-				{
-					frm.Write(frag);
-					Volatile.Write(ref b.reqAckDgram, frag.ToArray());
-
-					for (int i = 0; i < cfg.SendRetries; i++)
-					{
-						var dgram = Volatile.Read(ref b.reqAckDgram);
-
-						if (dgram == null) break;
-
-						socket.Send(dgram, SocketFlags.None);
-						if (log != null) traceOutFrame("ReqAck", frm.FrameID, $"B: {b.ID} {b.TotalSize} F: {fid}, {i + 1} time(s).");
-
-						if (rst.Wait(cfg.RetryDelayMS)) break;
-					}
-
-					Volatile.Write(ref b.reqAckDgram, null);
-				}
-
-				return Volatile.Read(ref rsp);
-			}
+			else if (log != null) traceInFrame("NoAwait", sg.FrameID, string.Empty);
 		}
 
 		void suggestTileSize()
