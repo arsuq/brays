@@ -17,9 +17,19 @@ namespace brays
 		public int ProbeFreqMS = 4000;
 		public int ErrorAwaitMS = 3000;
 		public int MaxReceiveRetries = 8;
-		public int SendRetries = 1;
-		public int RetryDelayMS = 8000;
+		public int SendRetries = 8;
+		public int RetryDelayMS = 400;
 		public int CleanupFreqMS = 8000;
+
+		/// <summary>
+		/// The delay in the Beam() loop.
+		/// </summary>
+		public int BeamAwaitMS = 1200;
+
+		/// <summary>
+		/// Beam() is invoked in a loop up to this number of times or until a status is received.
+		/// </summary>
+		public int TotalReBeamsCount = 3;
 
 		/// <summary>
 		/// A set of received frame IDs is kept for protecting against double processing.
@@ -51,6 +61,14 @@ namespace brays
 		/// Where the blocks are assembled.
 		/// </summary>
 		public IMemoryHighway ReceiveHighway;
+
+#if DEBUG
+		internal bool dropFrame() => dropFrames ? rdm.Next(0, 100000) < deopFrameProb * 100000 : false;
+
+		internal Random rdm = new Random();
+		internal bool dropFrames;
+		internal double deopFrameProb;
+#endif
 
 	}
 }

@@ -131,6 +131,7 @@ namespace brays
 		public readonly int TileCount;
 		public readonly Span<byte> TileMap;
 
-		public int LENGTH => 13 + (TileMap != null ? TileMap.Length : 0);
+		public const int HEADER = 13;
+		public int LENGTH => HEADER + (TileMap != null ? TileMap.Length : 0);
 	}
 }

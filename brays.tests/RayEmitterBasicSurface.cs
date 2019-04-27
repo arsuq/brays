@@ -17,11 +17,12 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
-			await OneByteDgram();
-			await OneMegDgrams();
+			//await oneByteDgram();
+			//await oneMegDgrams();
+			await missingTiles();
 		}
 
-		async Task OneByteDgram()
+		async Task oneByteDgram()
 		{
 			RayEmitter rayA = null;
 			RayEmitter rayB = null;
@@ -89,7 +90,7 @@ namespace brays.tests
 			}
 		}
 
-		async Task OneMegDgrams()
+		async Task oneMegDgrams()
 		{
 			RayEmitter rayA = null;
 			RayEmitter rayB = null;
@@ -175,5 +176,101 @@ namespace brays.tests
 				rayB.Dispose();
 			}
 		}
+
+		async Task missingTiles()
+		{
+			RayEmitter rayA = null;
+			RayEmitter rayB = null;
+
+			const int MEG = 1_000_000;
+
+			try
+			{
+				var rst = new ManualResetEvent(false);
+				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
+				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+				rayA = new RayEmitter(
+					(f) => { Console.WriteLine("?"); },
+					new EmitterCfg() { Log = true, LogFilePath = "rayA" });
+				rayB = new RayEmitter((f) =>
+				{
+					try
+					{
+						var s = f.Span();
+
+						if (s.Length == MEG)
+						{
+							for (int i = 0; i < MEG; i++)
+								if (f[i] != 43)
+								{
+									Passed = false;
+									"rayB received incorrect data.".AsError();
+									break;
+								}
+
+							Passed = true;
+							"OK: rayB received the correct data.".AsSuccess();
+						}
+						else
+						{
+							Passed = false;
+							"rayB receive failed.".AsError();
+						}
+					}
+					finally
+					{
+						rst.Set();
+					}
+				}, new EmitterCfg()
+				{
+					Log = true,
+					LogFilePath = "rayB",
+#if DEBUG
+					dropFrames = true,
+					deopFrameProb = 0.3
+#endif
+				});
+
+				using (var hw = new HeapHighway())
+				{
+					var ta = new Task(async () =>
+					{
+						rayA.LockOn(aep, bep);
+
+						var f = hw.Alloc(MEG);
+
+						for (int i = 0; i < MEG; i++)
+							f[i] = 43;
+
+						await rayA.Beam(f);
+					});
+
+					var tb = new Task(() =>
+					{
+						rayB.LockOn(bep, aep);
+					});
+
+					ta.Start();
+					tb.Start();
+					rst.WaitOne();
+				}
+
+				await Task.Delay(0);
+
+				Passed = true;
+				IsComplete = true;
+			}
+			catch (Exception ex)
+			{
+				FailureMessage = ex.Message;
+				Passed = false;
+			}
+			finally
+			{
+				rayA.Dispose();
+				rayB.Dispose();
+			}
+		}
+
 	}
 }
