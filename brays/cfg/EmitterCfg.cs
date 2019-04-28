@@ -37,6 +37,11 @@ namespace brays
 		public TimeSpan ProcessedFramesIDRetention = new TimeSpan(0, 10, 0);
 
 		/// <summary>
+		/// The out signals are kept for re-sending when dgrams are lost.
+		/// </summary>
+		public TimeSpan SentSignalsRetention = new TimeSpan(0, 5, 0);
+
+		/// <summary>
 		/// All sent blocks are deleted this amount of time after being sent.
 		/// Re-beams offset the sent time.
 		/// </summary>
