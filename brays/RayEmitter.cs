@@ -347,7 +347,7 @@ namespace brays
 				{
 					try
 					{
-						if (log != null) traceInFrame("Block", fid, $"B: {b.ID} completed. Triggering the onReceived callback.");
+						if (log != null) traceInFrame("Block", fid, $"B: {b.ID} completed.");
 						onReceived(b.Fragment);
 					}
 					catch { }
@@ -573,11 +573,11 @@ namespace brays
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void traceOutFrame(string op, int frame, string msg = null) =>
-			log.Write(string.Format("o:{0,-10} [{1}] {2}", frame, op, msg));
+			log.Write(string.Format("{0,10}:o [{1}] {2}", frame, op, msg));
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void traceInFrame(string op, int frame, string msg = null) =>
-			log.Write(string.Format("i:{0,-10} [{1}] {2}", frame, op, msg));
+			log.Write(string.Format("{0,10}:i [{1}] {2}", frame, op, msg));
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void trace(string op, string title, string msg = null) =>
