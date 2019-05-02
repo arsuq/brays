@@ -16,13 +16,18 @@ namespace brays
 				var c = count >> 5;
 				if ((count & 5) != 0) c++;
 				tiles = new int[c];
+				doneMask = new int[c];
 				Bytes = c;
 			}
 			else
 			{
 				tiles = new int[1];
+				doneMask = new int[1];
 				Bytes = 4;
 			}
+
+			for (int i = 0; i < count; i++)
+				doneMask[i >> 5] |= 1 << i;
 
 			Count = count;
 		}
@@ -88,10 +93,20 @@ namespace brays
 			tiles.CopyTo(s);
 		}
 
+		public void Or(BitMask mask)
+		{
+			if (mask.Count > Count) throw new ArgumentException($"The OR mask has more than {Count} bits.");
+
+			lock (wsync)
+				for (int i = 0; i < mask.tiles.Length; i++)
+					tiles[i] |= mask.tiles[i];
+		}
+
 		public bool IsComplete()
 		{
-			for (int i = 0; i < Count; i++)
-				if (!this[i]) return false;
+			for (int i = 0; i < tiles.Length; i++)
+				if ((Volatile.Read(ref tiles[i]) ^ doneMask[i]) != 0)
+					return false;
 
 			return true;
 		}
@@ -110,5 +125,6 @@ namespace brays
 		public readonly int Bytes;
 		object wsync = new object();
 		int[] tiles;
+		int[] doneMask;
 	}
 }

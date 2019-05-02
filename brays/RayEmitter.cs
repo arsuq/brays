@@ -23,7 +23,7 @@ namespace brays
 			inHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
 
-			if (cfg.Log) log = new Log(cfg.LogFilePath, "log", 500);
+			if (cfg.Log != null) log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB);
 		}
 
 		public void Dispose()
@@ -104,6 +104,7 @@ namespace brays
 		}
 
 		public readonly Guid ID;
+		public bool IsStopped => Volatile.Read(ref stop) > 0;
 		public bool IsLocked => isLocked;
 		public int FrameCounter => frameCounter;
 		public int ReceivedDgrams => receivedDgrams;
@@ -120,7 +121,7 @@ namespace brays
 			int sent = 0;
 
 			for (int i = 0; i < b.tileMap.Count; i++)
-				if (!b.tileMap[i])
+				if (!b.tileMap[i] && Volatile.Read(ref stop) < 1)
 					using (var mf = outHighway.Alloc(b.TileSize + 50))
 					{
 						var s = b.Fragment.Span().Slice(i * b.TileSize);
@@ -135,13 +136,14 @@ namespace brays
 						{
 							b.isFaulted = true;
 
-							if (log != null)
+							if (log != null && cfg.Log.TraceBeam)
 								traceOutFrame("Beam", fid, $"Faulted for sending {sbytes} of {dgram.Length} byte dgram.");
 
 							return false;
 						}
 
-						if (log != null) traceOutFrame("Beam", fid, $"{sbytes} B:{b.ID} T:{i}");
+						if (log != null && cfg.Log.TraceBeam)
+							traceOutFrame("Beam", fid, $"{sbytes} B:{b.ID} T:{i}");
 
 						sent++;
 					}
@@ -152,6 +154,8 @@ namespace brays
 
 		bool status(int blockID, int tilesCount, bool awaitRsp, Span<byte> tileMap)
 		{
+			if (Volatile.Read(ref stop) > 0) return false;
+
 			var rst = new ManualResetEventSlim(false);
 			var fid = Interlocked.Increment(ref frameCounter);
 			var len = tileMap.Length + STATUS.HEADER;
@@ -164,7 +168,7 @@ namespace brays
 				var ackq = !awaitRsp || signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 				{
 					if ((SignalKind)mark == SignalKind.ACK) Volatile.Write(ref rsp, true);
-					else if (log != null) traceInFrame("NACK", fid, string.Empty);
+					else if (log != null && cfg.Log.TraceStatus) traceInFrame("NACK", fid, string.Empty);
 
 					signalAwaits.TryRemove(fid, out SignalAwait x);
 					rst.Set();
@@ -181,7 +185,7 @@ namespace brays
 					{
 						var sent = socket.Send(frag, SocketFlags.None);
 
-						if (log != null)
+						if (log != null && cfg.Log.TraceStatus)
 							if (sent == 0) traceOutFrame("Status", fid, $"Socket sent 0 bytes. B: {blockID} #{i + 1}");
 							else traceOutFrame("Status", fid, $"B: {blockID} {map} #{i + 1}");
 
@@ -205,7 +209,7 @@ namespace brays
 			if (sent > 0)
 			{
 				if (keep) sentSignals.TryAdd(fid, new SignalResponse(signal.Mark, isError));
-				if (log != null) traceOutFrame("Signal", fid, $"Mark [{mark}] RefID [{refID}]");
+				if (log != null && cfg.Log.TraceSignal) traceOutFrame("Signal", fid, $"Mark [{mark}] RefID [{refID}]");
 			}
 
 			return sent;
@@ -242,7 +246,7 @@ namespace brays
 						frm.Write(b.reqAckDgram);
 						socket.Send(b.reqAckDgram, SocketFlags.None);
 
-						if (log != null)
+						if (log != null && cfg.Log.TraceReqAck)
 							traceOutFrame("ReqAck", frm.FrameID, $"B: {b.ID} Total: {b.TotalSize} Tile: {b.TileSize} #{i + 1}");
 
 						if (rst.Wait(cfg.RetryDelayMS)) break;
@@ -323,9 +327,12 @@ namespace brays
 			else
 			{
 				signal(f.FrameID, (int)SignalKind.ACK);
+
 				if (f.Options == (byte)FrameOptions.ReqAckBlockTransfer)
 				{
-					if (log != null) traceInFrame("Multiple REQACKs", f.FrameID, $"B: {f.BlockID}");
+					if (log != null && cfg.Log.TraceProcBlock)
+						traceInFrame("Multiple REQACKs", f.FrameID, $"B: {f.BlockID}");
+
 					return;
 				}
 			}
@@ -334,20 +341,26 @@ namespace brays
 
 			if (!b.Receive(f))
 			{
-				if (log != null) traceInFrame("Tile ignore", f.FrameID, $"B: {b.ID} T: {f.TileIndex}");
+				if (log != null && cfg.Log.TraceProcBlock)
+					traceInFrame("Tile ignore", f.FrameID, $"B: {b.ID} T: {f.TileIndex}");
+
 				return;
 			}
 
-			if (log != null) traceInFrame("Block", f.FrameID, $"{f.Length} B:{f.BlockID} T: {f.TileIndex}");
+			if (log != null && cfg.Log.TraceProcBlock)
+				traceInFrame("Block", f.FrameID, $"{f.Length} B:{f.BlockID} T: {f.TileIndex}");
 
 			int fid = f.FrameID;
 
-			if (b.IsComplete && onReceived != null && Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
+			if (b.IsComplete && onReceived != null &&
+				Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
 				Task.Run(() =>
 				{
 					try
 					{
-						if (log != null) traceInFrame("Block", fid, $"B: {b.ID} completed.");
+						if (log != null && cfg.Log.TraceProcBlock)
+							traceInFrame("Block", fid, $"B: {b.ID} completed.");
+
 						onReceived(b.Fragment);
 					}
 					catch { }
@@ -366,7 +379,7 @@ namespace brays
 			}
 #endif
 
-			if (!isClone(sg.FrameID) && log != null)
+			if (!isClone(sg.FrameID) && log != null && cfg.Log.TraceProcError)
 				traceInFrame("Error", sg.FrameID, $"Code [{sg.Mark}] RefID [{sg.RefID}].");
 		}
 
@@ -388,7 +401,8 @@ namespace brays
 
 					if (b.IsIncoming)
 					{
-						if (log != null) traceInFrame("InStatus", st.FrameID, $"In B: {st.BlockID}");
+						if (log != null && cfg.Log.TraceProcStatus)
+							traceInFrame("InStatus", st.FrameID, $"In B: {st.BlockID}");
 
 						// This signal is received after the other side has sent all tiles.
 						// Sends a re-beam request if no tile is received for x ms.
@@ -401,13 +415,16 @@ namespace brays
 
 						if (b.IsComplete)
 						{
-							if (log != null) traceInFrame("InStatus", st.FrameID, $"Out B: {st.BlockID} completed.");
+							if (log != null && cfg.Log.TraceProcStatus)
+								traceInFrame("InStatus", st.FrameID, $"Out B: {st.BlockID} completed.");
+
 							if (blockMap.TryRemove(st.BlockID, out Block rem)) b.Dispose();
 						}
 						else
 						{
-							if (log != null) traceInFrame("InStatus", st.FrameID,
-								$"[Re-beam] B: {st.BlockID} M: {b.tileMap.ToBinaryString()}");
+							if (log != null && cfg.Log.TraceProcStatus)
+								traceInFrame("InStatus", st.FrameID,
+									$"[Re-beam] B: {st.BlockID} M: {b.tileMap.ToBinaryString()}");
 
 							beam(b);
 						}
@@ -416,7 +433,9 @@ namespace brays
 				else
 				{
 					signal(st.FrameID, (int)SignalKind.UNK);
-					if (log != null) traceInFrame("InStatus", st.FrameID, $"[Unknown] B: {st.BlockID}");
+
+					if (log != null && cfg.Log.TraceProcStatus)
+						traceInFrame("InStatus", st.FrameID, $"[Unknown] B: {st.BlockID}");
 				}
 		}
 
@@ -455,22 +474,24 @@ namespace brays
 				if (signalAwaits.TryGetValue(sg.RefID, out SignalAwait sa) && sa.OnSignal != null)
 					try
 					{
-						if (log != null) traceInFrame("InSignal", sg.FrameID, $"Mark: [{sg.Mark}] RefID: {sg.RefID}");
+						if (log != null && cfg.Log.TraceProcSignal)
+							traceInFrame("InSignal", sg.FrameID, $"Mark: [{sg.Mark}] RefID: {sg.RefID}");
+
 						sa.OnSignal(sg.Mark);
 					}
 					catch { }
-				else if (log != null) traceInFrame("NoAwait", sg.FrameID, string.Empty);
+				else if (log != null && cfg.Log.TraceProcSignal) traceInFrame("NoAwait", sg.FrameID, string.Empty);
 		}
 
 		void suggestTileSize()
 		{
-
+			// 2d0
 		}
 
 		async Task probe()
 		{
 			if (cfg.EnableProbes)
-				while (Volatile.Read(ref stop) < 1)
+				while (Volatile.Read(ref stop) < 1 && Volatile.Read(ref cfg.EnableProbes))
 					try
 					{
 						socket.Send(probeLead);
@@ -506,10 +527,10 @@ namespace brays
 				catch (Exception ex)
 				{
 					Interlocked.Exchange(ref exception, ex);
-					Interlocked.Exchange(ref stop, 1);
 				}
 
 			if (log != null) trace("Receive", "Not listening.");
+			Interlocked.Exchange(ref stop, 1);
 		}
 
 		async Task cleanup()
@@ -535,7 +556,7 @@ namespace brays
 							procFrames.TryRemove(fi.Key, out DateTime x);
 
 					foreach (var ss in sentSignals)
-						if (DTN.Subtract(ss.Value.Created) > cfg.SentBlockRetention)
+						if (DTN.Subtract(ss.Value.Created) > cfg.SentSignalsRetention)
 							sentSignals.TryRemove(ss.Key, out SignalResponse x);
 				}
 				catch { }
@@ -547,13 +568,14 @@ namespace brays
 		{
 			try
 			{
-				while (!b.IsComplete || !b.isFaulted)
+				while (Volatile.Read(ref stop) < 1 && (!b.IsComplete || !b.isFaulted))
 				{
 					await Task.Delay(cfg.WaitForTilesAfterAllSentMS);
 
 					if (b.shouldReqTiles(cfg.WaitForTilesAfterAllSentMS))
 					{
-						if (log != null) trace("ReqTiles", $"B: {b.ID} m/t: {b.MarkedTiles}/{b.TilesCount}");
+						if (log != null && cfg.Log.TraceReqTiles)
+							trace("ReqTiles", $"B: {b.ID} m/t: {b.MarkedTiles}/{b.TilesCount}");
 
 						using (var frag = outHighway.Alloc(b.tileMap.Bytes))
 						{
@@ -563,7 +585,8 @@ namespace brays
 					}
 				}
 
-				if (log != null) trace("ReqTiles", $"Out of ReqTiles B: {b.ID} IsComplete: {b.IsComplete} IsFaulted: {b.isFaulted}");
+				if (log != null && cfg.Log.TraceReqTiles )
+					trace("ReqTiles", $"Out of ReqTiles B: {b.ID} IsComplete: {b.IsComplete} IsFaulted: {b.isFaulted}");
 			}
 			catch (Exception ex)
 			{
@@ -572,16 +595,25 @@ namespace brays
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void traceOutFrame(string op, int frame, string msg = null) =>
-			log.Write(string.Format("{0,10}:o [{1}] {2}", frame, op, msg));
+		void traceOutFrame(string op, int frame, string msg = null)
+		{
+			if (Volatile.Read(ref cfg.Log.Enabled))
+				log.Write(string.Format("{0,10}:o [{1}] {2}", frame, op, msg));
+		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void traceInFrame(string op, int frame, string msg = null) =>
-			log.Write(string.Format("{0,10}:i [{1}] {2}", frame, op, msg));
+		void traceInFrame(string op, int frame, string msg = null)
+		{
+			if (Volatile.Read(ref cfg.Log.Enabled))
+				log.Write(string.Format("{0,10}:i [{1}] {2}", frame, op, msg));
+		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void trace(string op, string title, string msg = null) =>
-			log.Write(string.Format("{0,-12} [{1}] {2}", " ", op, title), msg);
+		void trace(string op, string title, string msg = null)
+		{
+			if (Volatile.Read(ref cfg.Log.Enabled))
+				log.Write(string.Format("{0,-12} [{1}] {2}", " ", op, title), msg);
+		}
 
 		Action<MemoryFragment> onReceived;
 

@@ -18,8 +18,11 @@ namespace brays.tests
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
 			//await oneByteDgram();
-			//await oneMegDgrams();
-			await missingTiles();
+			//await oneMeg();
+#if DEBUG
+			//await missingTiles();
+			await oneGig();
+#endif
 		}
 
 		async Task oneByteDgram()
@@ -33,13 +36,13 @@ namespace brays.tests
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 				rayA = new RayEmitter((f) => { Console.WriteLine("?"); },
-					new EmitterCfg() { Log = true, LogFilePath = "rayA" });
+					new EmitterCfg() { Log = new LogCfg("rayA", true) });
 				rayB = new RayEmitter((f) =>
 				{
 					if (f.Span()[0] == 1)
 					{
 						Passed = true;
-						"OK: rayB received 1".AsSuccess();
+						"OK: rayB received 1 byte.".AsSuccess();
 					}
 					else
 					{
@@ -49,7 +52,7 @@ namespace brays.tests
 
 					rst.Set();
 
-				}, new EmitterCfg() { Log = true, LogFilePath = "rayB" });
+				}, new EmitterCfg() { Log = new LogCfg("rayB", true) });
 
 				using (var hw = new HeapHighway(50))
 				{
@@ -90,7 +93,7 @@ namespace brays.tests
 			}
 		}
 
-		async Task oneMegDgrams()
+		async Task oneMeg()
 		{
 			RayEmitter rayA = null;
 			RayEmitter rayB = null;
@@ -104,7 +107,7 @@ namespace brays.tests
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 				rayA = new RayEmitter(
 					(f) => { Console.WriteLine("?"); },
-					new EmitterCfg() { Log = true, LogFilePath = "rayA" });
+					new EmitterCfg() { Log = new LogCfg("rayA", true) });
 				rayB = new RayEmitter((f) =>
 				{
 					try
@@ -122,7 +125,7 @@ namespace brays.tests
 								}
 
 							Passed = true;
-							"OK: rayB received the correct data.".AsSuccess();
+							"OK: Send/Receive 1meg.".AsSuccess();
 						}
 						else
 						{
@@ -134,7 +137,7 @@ namespace brays.tests
 					{
 						rst.Set();
 					}
-				}, new EmitterCfg() { Log = true, LogFilePath = "rayB" });
+				}, new EmitterCfg() { Log = new LogCfg("rayB", true) });
 
 				using (var hw = new HeapHighway())
 				{
@@ -193,8 +196,7 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new EmitterCfg()
 					{
-						Log = true,
-						LogFilePath = "rayA",
+						Log = new LogCfg("rayA", true),
 #if DEBUG
 						dropFrames = true,
 						deopFrameProb = 0.3
@@ -217,7 +219,7 @@ namespace brays.tests
 								}
 
 							Passed = true;
-							"OK: rayB received the correct data.".AsSuccess();
+							"OK: Send/Receive 1meg with dropped random frames on both sides.".AsSuccess();
 						}
 						else
 						{
@@ -231,8 +233,7 @@ namespace brays.tests
 					}
 				}, new EmitterCfg()
 				{
-					Log = true,
-					LogFilePath = "rayB",
+					Log = new LogCfg("rayB", true),
 #if DEBUG
 					dropFrames = true,
 					deopFrameProb = 0.3
@@ -280,5 +281,138 @@ namespace brays.tests
 			}
 		}
 
+		async Task oneGig()
+		{
+			RayEmitter rayA = null;
+			RayEmitter rayB = null;
+
+			const int GIG = 10_000_000;
+			int totalSend = 0;
+			int totalReceived = 0;
+			int totalFragsOut = 0;
+			int totalFragsIn = 0;
+			var rdmSize = new Random();
+
+			try
+			{
+				var rst = new ManualResetEvent(false);
+				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
+				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+
+				void receive(MemoryFragment f)
+				{
+					try
+					{
+						var s = f.Span();
+						int len = 0;
+						f.Read(ref len, 0);
+						Interlocked.Increment(ref totalFragsIn);
+
+						if (s.Length == len)
+						{
+							for (int i = 4; i < len; i++)
+								if (f[i] != 43)
+								{
+									Passed = false;
+									"rayB received incorrect data.".AsError();
+									break;
+								}
+
+							Interlocked.Add(ref totalReceived, len);
+						}
+						else
+						{
+							Passed = false;
+							"rayB receive failed.".AsError();
+						}
+					}
+					finally
+					{
+						if ((Passed.HasValue && !Passed.Value) || Volatile.Read(ref totalReceived) >= GIG)
+						{
+							if (!Passed.HasValue)
+							{
+								Passed = true;
+								"OK: Send/Receive 1gig with dropped random frames on both sides.".AsSuccess();
+							}
+
+							rst.Set();
+						}
+					}
+				}
+
+				rayA = new RayEmitter(
+					(f) => { Console.WriteLine("?"); },
+					new EmitterCfg()
+					{
+						Log = new LogCfg("rayA", true),
+#if DEBUG
+						dropFrames = true,
+						deopFrameProb = 0.2
+#endif
+					});
+
+				rayB = new RayEmitter(receive, new EmitterCfg()
+				{
+					Log = new LogCfg("rayB", true),
+#if DEBUG
+					dropFrames = true,
+					deopFrameProb = 0.2
+#endif
+				});
+
+				using (var hw = new HeapHighway())
+				{
+					var ta = new Task(() =>
+					{
+						rayA.LockOn(aep, bep);
+
+						while (!rayA.IsStopped)
+						{
+							var len = rdmSize.Next(10, 1_000_000);
+							var f = hw.Alloc(len);
+
+							for (int i = 0; i < len; i++)
+								f[i] = 43;
+
+							f.Write(len, 0);
+							rayA.Beam(f);
+							Interlocked.Increment(ref totalFragsOut);
+
+							if (Interlocked.Add(ref totalSend, len) > GIG)
+								break;
+						}
+					});
+
+					var tb = new Task(() =>
+					{
+						rayB.LockOn(bep, aep);
+					});
+
+					ta.Start();
+					tb.Start();
+					if (!rst.WaitOne(new TimeSpan(0, 2, 0)))
+					{
+						Passed = false;
+						FailureMessage = "Send reset timeout.";
+					}
+				}
+
+				await Task.Delay(0);
+
+				Passed = true;
+				IsComplete = true;
+			}
+			catch (Exception ex)
+			{
+				FailureMessage = ex.Message;
+				Passed = false;
+			}
+			finally
+			{
+				rayA.Dispose();
+				rayB.Dispose();
+			}
+		}
 	}
 }

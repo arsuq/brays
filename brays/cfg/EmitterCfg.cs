@@ -4,21 +4,58 @@ namespace brays
 {
 	public class EmitterCfg
 	{
-		public EmitterCfg(IMemoryHighway receiveHighway = null)
+		public EmitterCfg(IMemoryHighway receiveHighway = null, LogCfg logcfg = null)
 		{
-			if (receiveHighway == null)
-				ReceiveHighway = new HeapHighway();
+			ReceiveHighway = receiveHighway != null ? receiveHighway : new HeapHighway();
+			Log = logcfg;
 		}
 
-		public string LogFilePath;
-		public bool Log = false;
+		/// <summary>
+		/// The log configuration.
+		/// </summary>
+		public LogCfg Log;
+
+		/// <summary>
+		/// If true - sends probe dgrams every ProbeFreqMS. 
+		/// The default is false.
+		/// </summary>
 		public bool EnableProbes = false;
-		public ushort TileSize = 40_000;
+
+		/// <summary>
+		/// The default value is 4sec.
+		/// </summary>
 		public int ProbeFreqMS = 4000;
+
+		/// <summary>
+		/// The desired dgram size. It's used for all block exchanges.
+		/// The default value is 40K.
+		/// </summary>
+		public ushort TileSize = 40_000;
+
+		/// <summary>
+		/// This is the receive loop error sleep between retries.
+		/// </summary>
 		public int ErrorAwaitMS = 3000;
+
+		/// <summary>
+		/// After this number of receive retries the Emitter shuts down.
+		/// </summary>
 		public int MaxReceiveRetries = 8;
+
+		/// <summary>
+		/// The number of unconfirmed status dgram sends before bailing the corresponding operation. 
+		/// </summary>
 		public int SendRetries = 8;
+
+		/// <summary>
+		/// The SendRetries loop await. 
+		/// </summary>
 		public int RetryDelayMS = 400;
+
+		/// <summary>
+		/// The cleanup triggering frequency.
+		/// The default is 8sec.
+		/// </summary>
 		public int CleanupFreqMS = 8000;
 
 		/// <summary>

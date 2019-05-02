@@ -11,10 +11,9 @@ namespace brays
 			BlockID = bid;
 			TotalSize = ts;
 			TileIndex = ti;
-			Length = l;
+			Length = s.Length > 0 ? (ushort)s.Length : l;
 			Options = o;
 			Data = s;
-			if (Data.Length > l) Data = Data.Slice(0, l);
 		}
 
 		public FRAME(Span<byte> s)

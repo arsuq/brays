@@ -62,6 +62,7 @@ namespace brays
 					var dst = fragment.Span().Slice(f.TileIndex * TileSize);
 
 					src.CopyTo(dst);
+
 					tileMap[f.TileIndex] = true;
 					markedTiles++;
 					Interlocked.Exchange(ref lastReceivedTileTick, DateTime.Now.Ticks);
@@ -115,7 +116,8 @@ namespace brays
 
 		public MemoryFragment Fragment => fragment;
 		public int MarkedTiles => Volatile.Read(ref markedTiles);
-		public bool IsComplete => MarkedTiles == TilesCount;
+		public bool IsComplete => tileMap.IsComplete();
+		public bool HasAllTiles => MarkedTiles == TilesCount;
 
 		public readonly int ID;
 		public readonly int TotalSize;
