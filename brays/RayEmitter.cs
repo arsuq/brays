@@ -172,7 +172,7 @@ namespace brays
 					if ((SignalKind)mark == SignalKind.ACK) Volatile.Write(ref rsp, true);
 					else trace(TraceOps.Status, fid, $"NACK B: {blockID}");
 
-					signalAwaits.TryRemove(fid, out SignalAwait x);
+					//signalAwaits.TryRemove(fid, out SignalAwait x);
 					rst.Set();
 				}));
 
@@ -233,7 +233,7 @@ namespace brays
 					Volatile.Write(ref rsp, true);
 				}
 
-				signalAwaits.TryRemove(fid, out SignalAwait x);
+				//signalAwaits.TryRemove(fid, out SignalAwait x);
 				rst.Set();
 			}));
 
@@ -528,7 +528,7 @@ namespace brays
 
 				try
 				{
-					trace("Cleanup", $"Blocks: {blockMap.Count} Signals: {signalAwaits.Count}");
+					trace("Cleanup", $"Blocks: {blockMap.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignals.Count}");
 
 					foreach (var b in blockMap.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
