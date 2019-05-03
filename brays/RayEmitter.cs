@@ -181,7 +181,7 @@ namespace brays
 					var map = string.Empty;
 
 					if (blockMap.TryGetValue(blockID, out Block b) && tileMap.Length > 0)
-						map = $"M: {b.tileMap.ToBinaryString()} ";
+						map = $"M: {b.tileMap.ToString()} ";
 
 					for (int i = 0; i < cfg.SendRetries; i++)
 					{
@@ -209,7 +209,7 @@ namespace brays
 
 			if (sent > 0)
 			{
-				if (keep) sentSignals.TryAdd(fid, new SignalResponse(signal.Mark, isError));
+				if (keep) sentSignalsFor.TryAdd(refID, new SignalResponse(signal.Mark, isError));
 				trace(TraceOps.Signal, fid, $"M: {mark} R: {refID}");
 			}
 			else trace(TraceOps.Signal, fid, $"Failed to send M: {mark} R: {refID}");
@@ -409,12 +409,13 @@ namespace brays
 						if (b.IsComplete)
 						{
 							trace(TraceOps.ProcStatus, st.FrameID, $"Out B: {st.BlockID} completed.");
-							if (blockMap.TryRemove(st.BlockID, out Block rem)) b.Dispose();
+							blockMap.TryRemove(st.BlockID, out Block rem);
+							b.Dispose();
 						}
 						else
 						{
 							trace(TraceOps.ProcStatus, st.FrameID,
-								$"Re-beam B: {st.BlockID} M: {b.tileMap.ToBinaryString()}");
+								$"Re-beam B: {st.BlockID} M: {b.tileMap.ToString()}");
 
 							beam(b);
 						}
@@ -434,7 +435,7 @@ namespace brays
 			{
 				var s = string.Empty;
 
-				if (signalWithLastReply && sentSignals.TryGetValue(frameID, out SignalResponse sr))
+				if (signalWithLastReply && sentSignalsFor.TryGetValue(frameID, out SignalResponse sr))
 				{
 					signal(frameID, sr.Mark, sr.IsError);
 					s = $"Cached Reply M: {sr.Mark}";
@@ -528,7 +529,7 @@ namespace brays
 
 				try
 				{
-					trace("Cleanup", $"Blocks: {blockMap.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignals.Count}");
+					trace("Cleanup", $"Blocks: {blockMap.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
 
 					foreach (var b in blockMap.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
@@ -542,9 +543,9 @@ namespace brays
 						if (DTN.Subtract(fi.Value) > cfg.ProcessedFramesIDRetention)
 							procFrames.TryRemove(fi.Key, out DateTime x);
 
-					foreach (var ss in sentSignals)
+					foreach (var ss in sentSignalsFor)
 						if (DTN.Subtract(ss.Value.Created) > cfg.SentSignalsRetention)
-							sentSignals.TryRemove(ss.Key, out SignalResponse x);
+							sentSignalsFor.TryRemove(ss.Key, out SignalResponse x);
 				}
 				catch { }
 				await Task.Delay(cfg.CleanupFreqMS);
@@ -664,7 +665,7 @@ namespace brays
 		ConcurrentDictionary<int, SignalAwait> signalAwaits = new ConcurrentDictionary<int, SignalAwait>();
 		ConcurrentDictionary<int, Block> blockMap = new ConcurrentDictionary<int, Block>();
 		ConcurrentDictionary<int, DateTime> procFrames = new ConcurrentDictionary<int, DateTime>();
-		ConcurrentDictionary<int, SignalResponse> sentSignals = new ConcurrentDictionary<int, SignalResponse>();
+		ConcurrentDictionary<int, SignalResponse> sentSignalsFor = new ConcurrentDictionary<int, SignalResponse>();
 
 		public const ushort UDP_MAX = ushort.MaxValue;
 	}
