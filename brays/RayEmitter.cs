@@ -145,7 +145,7 @@ namespace brays
 							return false;
 						}
 
-						trace(TraceOps.Beam, fid, $"{sbytes} B:{b.ID} T:{i}");
+						trace(TraceOps.Beam, fid, $"{sbytes} B: {b.ID} T: {i}");
 						sent++;
 					}
 				}
@@ -170,7 +170,7 @@ namespace brays
 				var ackq = !awaitRsp || signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 				{
 					if ((SignalKind)mark == SignalKind.ACK) Volatile.Write(ref rsp, true);
-					else trace(TraceOps.Status, fid, $"[NACK] B: {blockID}");
+					else trace(TraceOps.Status, fid, $"NACK B: {blockID}");
 
 					signalAwaits.TryRemove(fid, out SignalAwait x);
 					rst.Set();
@@ -210,9 +210,9 @@ namespace brays
 			if (sent > 0)
 			{
 				if (keep) sentSignals.TryAdd(fid, new SignalResponse(signal.Mark, isError));
-				trace(TraceOps.Signal, fid, $"M: [{mark}] R: [{refID}]");
+				trace(TraceOps.Signal, fid, $"M: {mark} R: {refID}");
 			}
-			else trace(TraceOps.Signal, fid, $"Failed to send M: [{mark}] R: [{refID}]");
+			else trace(TraceOps.Signal, fid, $"Failed to send M: {mark} R: {refID}");
 
 			return sent;
 		}
@@ -302,7 +302,7 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				trace(TraceOps.DropFrame, f.FrameID, $"[ProcBlock] B: {f.BlockID} T: {f.TileIndex}");
+				trace(TraceOps.DropFrame, f.FrameID, $"ProcBlock B: {f.BlockID} T: {f.TileIndex}");
 				return;
 			}
 #endif
@@ -368,13 +368,13 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				trace(TraceOps.DropFrame, sg.FrameID, $"[ProcError]");
+				trace(TraceOps.DropFrame, sg.FrameID, $"ProcError");
 				return;
 			}
 #endif
 
 			if (!isClone(TraceOps.ProcError, sg.FrameID))
-				trace(TraceOps.ProcError, sg.FrameID, $"Code [{sg.Mark}] RefID [{sg.RefID}].");
+				trace(TraceOps.ProcError, sg.FrameID, $"Code: {sg.Mark} R: [{sg.RefID}.");
 		}
 
 		void procStatus(MemoryFragment frag)
@@ -383,7 +383,7 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				trace(TraceOps.DropFrame, st.FrameID, $"[ProcStatus] B: {st.BlockID}");
+				trace(TraceOps.DropFrame, st.FrameID, $"ProcStatus B: {st.BlockID}");
 				return;
 			}
 #endif
@@ -395,7 +395,7 @@ namespace brays
 
 					if (b.IsIncoming)
 					{
-						trace(TraceOps.ProcStatus, st.FrameID, $"All sent for B: {st.BlockID}");
+						trace(TraceOps.ProcStatus, st.FrameID, $"All-sent for B: {st.BlockID}");
 
 						// This signal is received after the other side has sent all tiles.
 						// Sends a re-beam request if no tile is received for x ms.
@@ -414,7 +414,7 @@ namespace brays
 						else
 						{
 							trace(TraceOps.ProcStatus, st.FrameID,
-								$"[Re-beam] B: {st.BlockID} M: {b.tileMap.ToBinaryString()}");
+								$"Re-beam B: {st.BlockID} M: {b.tileMap.ToBinaryString()}");
 
 							beam(b);
 						}
@@ -423,7 +423,7 @@ namespace brays
 				else
 				{
 					signal(st.FrameID, (int)SignalKind.UNK);
-					trace(TraceOps.ProcStatus, st.FrameID, $"[Unknown] B: {st.BlockID}");
+					trace(TraceOps.ProcStatus, st.FrameID, $"Unknown B: {st.BlockID}");
 				}
 		}
 
@@ -440,7 +440,7 @@ namespace brays
 					s = $"Cached Reply M: {sr.Mark}";
 				}
 
-				trace(op, frameID, $"[Clone] {s}");
+				trace(op, frameID, $"Clone {s}");
 
 				return true;
 			}
@@ -454,7 +454,7 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				trace(TraceOps.DropFrame, sg.FrameID, $"[ProcSignal] M: [{sg.Mark}] R: [{sg.RefID}]");
+				trace(TraceOps.DropFrame, sg.FrameID, $"ProcSignal M: {sg.Mark} R: {sg.RefID}");
 				return;
 			}
 #endif
@@ -462,12 +462,12 @@ namespace brays
 				if (signalAwaits.TryGetValue(sg.RefID, out SignalAwait sa) && sa.OnSignal != null)
 					try
 					{
-						trace(TraceOps.ProcSignal, sg.FrameID, $"M: [{sg.Mark}] R: [{sg.RefID}]");
+						trace(TraceOps.ProcSignal, sg.FrameID, $"M: {sg.Mark} R: {sg.RefID}");
 						sa.OnSignal(sg.Mark);
 					}
 					catch { }
 
-				else trace(TraceOps.ProcSignal, sg.FrameID, $"[NoAwait] M: [{sg.Mark}] R: [{sg.RefID}]");
+				else trace(TraceOps.ProcSignal, sg.FrameID, $"NoAwait M: {sg.Mark} R: {sg.RefID}");
 		}
 
 		void suggestTileSize()
@@ -573,7 +573,7 @@ namespace brays
 					await Task.Delay(cfg.WaitForTilesAfterAllSentMS);
 				}
 
-				trace(TraceOps.ReqTiles, 0, $"Out of ReqTiles B: {b.ID} IsComplete: {b.IsComplete}");
+				trace(TraceOps.ReqTiles, 0, $"Out-of-ReqTiles B: {b.ID} IsComplete: {b.IsComplete}");
 			}
 			catch (Exception ex)
 			{
@@ -593,20 +593,20 @@ namespace brays
 					case TraceOps.Beam:
 					case TraceOps.Status:
 					case TraceOps.Signal:
-					ttl = string.Format("{0,10}:o [{1}] {2}", frame, op, title);
+					ttl = string.Format("{0,10}:o {1, -12} {2}", frame, op, title);
 					break;
 					case TraceOps.ReqTiles:
-					ttl = string.Format("{0,-12} [{1}] {2}", " ", op, title);
+					ttl = string.Format("{0,-12} {1, -12} {2}", " ", op, title);
 					break;
 					case TraceOps.ProcBlock:
 					case TraceOps.ProcError:
 					case TraceOps.ProcStatus:
 					case TraceOps.ProcSignal:
-					ttl = string.Format("{0,10}:i [{1}] {2}", frame, op, title);
+					ttl = string.Format("{0,10}:i {1, -12} {2}", frame, op, title);
 					break;
 #if DEBUG
 					case TraceOps.DropFrame:
-					ttl = string.Format("{0,10}:? [{1}] {2}", frame, op, title);
+					ttl = string.Format("{0,10}:? {1, -12} {2}", frame, op, title);
 					break;
 #endif
 					case TraceOps.None:
@@ -626,7 +626,7 @@ namespace brays
 		{
 			if (log != null && Volatile.Read(ref cfg.Log.Enabled))
 			{
-				var s = string.Format("{0,-12} [{1}] {2}", " ", op, title);
+				var s = string.Format("{0,-12} {1, -12} {2}", " ", op, title);
 				log.Write(s, msg);
 				if (cfg.Log.OnTrace != null)
 					try { cfg.Log.OnTrace(TraceOps.None, s, msg); }
