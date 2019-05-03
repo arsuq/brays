@@ -105,11 +105,15 @@ namespace brays
 		public IMemoryHighway ReceiveHighway;
 
 #if DEBUG
-		internal bool dropFrame() => dropFrames ? rdm.Next(0, 100000) < deopFrameProb * 100000 : false;
+		internal bool dropFrame()
+		{
+			if (!dropFrames) return false;
+			lock (rdm) return rdm.Next(100) > (100 - deopFramePercent);
+		}
 
 		internal Random rdm = new Random();
 		internal bool dropFrames;
-		internal double deopFrameProb;
+		internal int deopFramePercent;
 #endif
 
 	}

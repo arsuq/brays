@@ -199,7 +199,7 @@ namespace brays.tests
 						Log = new LogCfg("rayA", true),
 #if DEBUG
 						dropFrames = true,
-						deopFrameProb = 0.3
+						deopFramePercent = 30
 #endif
 					});
 				rayB = new RayEmitter((f) =>
@@ -236,7 +236,7 @@ namespace brays.tests
 					Log = new LogCfg("rayB", true),
 #if DEBUG
 					dropFrames = true,
-					deopFrameProb = 0.3
+					deopFramePercent = 30
 #endif
 				});
 
@@ -293,6 +293,12 @@ namespace brays.tests
 			int totalFragsIn = 0;
 			var rdmSize = new Random();
 
+			void onTrace(TraceOps op, string title, string msg)
+			{
+				//if ((op & TraceOps.DropFrame) == TraceOps.DropFrame)
+				title.AsInnerInfo();
+			}
+
 			try
 			{
 				var rst = new ManualResetEvent(false);
@@ -301,12 +307,13 @@ namespace brays.tests
 
 				void receive(MemoryFragment f)
 				{
+					int len = 0;
+
 					try
 					{
 						var s = f.Span();
-						int len = 0;
 						f.Read(ref len, 0);
-						Interlocked.Increment(ref totalFragsIn);
+						var fi = Interlocked.Increment(ref totalFragsIn);
 
 						if (s.Length == len)
 						{
@@ -318,13 +325,21 @@ namespace brays.tests
 									break;
 								}
 
-							Interlocked.Add(ref totalReceived, len);
+							var ts = Interlocked.Add(ref totalReceived, len);
+							string.Format("R: {0, -10} TR: {1, -10} FI: {2, -3}", len, ts, fi).AsInnerInfo();
 						}
 						else
 						{
 							Passed = false;
 							"rayB receive failed.".AsError();
 						}
+					}
+					catch (Exception ex)
+					{
+						Passed = false;
+						FailureMessage = ex.Message;
+						ex.ToString().AsError();
+						rst.Set();
 					}
 					finally
 					{
@@ -345,19 +360,19 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new EmitterCfg()
 					{
-						Log = new LogCfg("rayA", true),
+						Log = new LogCfg("rayA", true, (TraceOps)1023) { OnTrace = null },
 #if DEBUG
 						dropFrames = true,
-						deopFrameProb = 0.2
+						deopFramePercent = 20
 #endif
 					});
 
 				rayB = new RayEmitter(receive, new EmitterCfg()
 				{
-					Log = new LogCfg("rayB", true),
+					Log = new LogCfg("rayB", true, (TraceOps)1023) { OnTrace = null },
 #if DEBUG
 					dropFrames = true,
-					deopFrameProb = 0.2
+					deopFramePercent = 20
 #endif
 				});
 
@@ -377,11 +392,16 @@ namespace brays.tests
 
 							f.Write(len, 0);
 							rayA.Beam(f);
-							Interlocked.Increment(ref totalFragsOut);
 
-							if (Interlocked.Add(ref totalSend, len) > GIG)
-								break;
+							var fo = Interlocked.Increment(ref totalFragsOut);
+							var ts = Interlocked.Add(ref totalSend, len);
+
+							string.Format("S: {0, -10} TS: {1, -10} FO: {2, -3}", len, ts, fo).AsInnerInfo();
+
+							if (ts > GIG) break;
 						}
+
+						$"Out of beaming loop".AsInnerInfo();
 					});
 
 					var tb = new Task(() =>
@@ -394,13 +414,13 @@ namespace brays.tests
 					if (!rst.WaitOne(new TimeSpan(0, 2, 0)))
 					{
 						Passed = false;
-						FailureMessage = "Send reset timeout.";
+						FailureMessage = "Timeout.";
 					}
 				}
 
 				await Task.Delay(0);
 
-				Passed = true;
+				if (!Passed.HasValue) Passed = true;
 				IsComplete = true;
 			}
 			catch (Exception ex)

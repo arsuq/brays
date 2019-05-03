@@ -111,7 +111,7 @@ namespace brays
 			}
 		}
 
-		internal bool shouldReqTiles(int gapMS) =>
+		internal bool timeToReqTiles(int gapMS) =>
 			new TimeSpan(DateTime.Now.Ticks - lastReceivedTileTick).TotalMilliseconds > gapMS;
 
 		public MemoryFragment Fragment => fragment;
@@ -127,7 +127,7 @@ namespace brays
 
 		internal readonly BitMask tileMap;
 		internal byte[] reqAckDgram;
-		internal DateTime sentTime;
+		internal DateTime sentTime = DateTime.MaxValue;
 		internal long lastReceivedTileTick;
 		internal bool isFaulted;
 		internal int isOnCompleteTriggered;

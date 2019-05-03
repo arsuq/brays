@@ -1,25 +1,24 @@
-﻿namespace brays
+﻿using System;
+
+namespace brays
 {
 	public class LogCfg
 	{
-		public LogCfg(string filePath, bool enabled = false, bool traceAll = true, string ext = "brays", int rotSizeKb = 500)
+		public LogCfg(
+			string filePath, bool enabled, TraceOps trace = (TraceOps)511,
+			string ext = "brays", int rotSizeKb = 500)
 		{
 			LogFilePath = filePath;
 			Enabled = enabled;
 			Ext = ext;
 			RotationLogFileKB = rotSizeKb;
-
-			TraceReqAck = traceAll;
-			TraceReqTiles = traceAll;
-			TraceBeam = traceAll;
-			TraceStatus = traceAll;
-			TraceSignal = traceAll;
-			TraceProcBlock = traceAll;
-			TraceProcError = traceAll;
-			TraceProcStatus = traceAll;
-			TraceProcSignal = traceAll;
-
+			Flags = trace;
 		}
+
+		/// <summary>
+		/// If not null will be invoked on each trace.
+		/// </summary>
+		public Action<TraceOps, string, string> OnTrace;
 
 		/// <summary>
 		/// The trace file path.
@@ -41,14 +40,9 @@
 		/// </summary>
 		public int RotationLogFileKB;
 
-		public bool TraceReqAck;
-		public bool TraceReqTiles;
-		public bool TraceBeam;
-		public bool TraceStatus;
-		public bool TraceSignal;
-		public bool TraceProcBlock;
-		public bool TraceProcError;
-		public bool TraceProcStatus;
-		public bool TraceProcSignal;
+		/// <summary>
+		/// The trace-enabled ops.
+		/// </summary>
+		public TraceOps Flags;
 	}
 }
