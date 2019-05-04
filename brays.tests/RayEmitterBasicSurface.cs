@@ -23,7 +23,9 @@ namespace brays.tests
 			//			await missingTiles();
 			//			await M30();
 			//#endif
-			await oneGigNoLogNoVerify();
+
+			for (int i = 0; i < 4; i++)
+				await halfGigNoLogNoVerify();
 		}
 
 		async Task oneByteDgram()
@@ -431,15 +433,15 @@ namespace brays.tests
 			}
 		}
 
-		async Task oneGigNoLogNoVerify()
+		async Task halfGigNoLogNoVerify()
 		{
-			"[In] oneGigNoLogNoVerify()".AsTestInfo();
+			"[In] halfGigNoLogNoVerify()".AsTestInfo();
 			var started = DateTime.Now;
 
 			RayEmitter rayA = null;
 			RayEmitter rayB = null;
 
-			const int CAP = 200_000_000;
+			const int CAP = 500_000_000;
 			int totalSend = 0;
 			int totalReceived = 0;
 			int totalFragsOut = 0;
@@ -455,6 +457,8 @@ namespace brays.tests
 				void receive(MemoryFragment f)
 				{
 					int len = 0;
+					bool err = false;
+					int rec = 0;
 
 					try
 					{
@@ -462,38 +466,47 @@ namespace brays.tests
 						f.Read(ref len, 0);
 						var fi = Interlocked.Increment(ref totalFragsIn);
 
-						if (s.Length == len)
-						{
-							var ts = Interlocked.Add(ref totalReceived, len);
-							string.Format("R: {0, -10} TR: {1, -10} FI: {2, -3}", len, ts, fi).AsInnerInfo();
-						}
-						else
-						{
-							Passed = false;
-							"rayB receive failed.".AsError();
-						}
+						if (s.Length == len) rec = Interlocked.Add(ref totalReceived, len);
+						else err = true;
 					}
 					finally
 					{
 						f.Dispose();
+						var rem = CAP - rec;
 
-						if ((Passed.HasValue && !Passed.Value) || Volatile.Read(ref totalReceived) >= CAP)
+						if (rem < 0) rem = 0;
+						$"Rem: {rem} ".AsInnerInfo();
+
+						if (err)
 						{
-							if (!Passed.HasValue)
-							{
-								Passed = true;
-								var ts = DateTime.Now.Subtract(started);
-
-								$"OK: oneGigNoLogNoVerify() {ts.Seconds}s {ts.Milliseconds}ms".AsSuccess();
-							}
-
+							"rayB receive failed.".AsError();
 							rst.Set();
 						}
+						else if (rec >= CAP)
+						{
+							Passed = true;
+							IsComplete = true;
+							var ts = DateTime.Now.Subtract(started);
+
+							$"OK: halfGigNoLogNoVerify() {ts.Seconds}s {ts.Milliseconds}ms".AsSuccess();
+							rst.Set();
+						}
+
 					}
 				}
 
-				rayA = new RayEmitter((f) => { }, new EmitterCfg() { TileSize = 55000 });
-				rayB = new RayEmitter(receive, new EmitterCfg() { TileSize = 55000 });
+				var traceops = (TraceOps)1023;
+
+				rayA = new RayEmitter((f) => { }, new EmitterCfg()
+				{
+					Log = new LogCfg("rayA", true, traceops),
+					TileSize = 60000
+				});
+				rayB = new RayEmitter(receive, new EmitterCfg()
+				{
+					Log = new LogCfg("rayB", true, traceops),
+					TileSize = 60000
+				});
 
 				using (var hw = new HeapHighway())
 				{
@@ -509,12 +522,8 @@ namespace brays.tests
 							f.Write(len, 0);
 							rayA.Beam(f);
 
-							var fo = Interlocked.Increment(ref totalFragsOut);
-							var ts = Interlocked.Add(ref totalSend, len);
-
-							string.Format("S: {0, -10} TS: {1, -10} FO: {2, -3}", len, ts, fo).AsInnerInfo();
-
-							if (ts > CAP) break;
+							Interlocked.Increment(ref totalFragsOut);
+							if (Interlocked.Add(ref totalSend, len) > CAP) break;
 						}
 
 						$"Out of beaming loop".AsInnerInfo();
@@ -537,8 +546,7 @@ namespace brays.tests
 
 				await Task.Delay(0);
 
-				if (Passed.HasValue && !Passed.Value) "oneGigNoLogNoVerify failed".AsError();
-				IsComplete = true;
+				if (Passed.HasValue && !Passed.Value || !IsComplete) "halfGigNoLogNoVerify() failed".AsError();
 			}
 			catch (Exception ex)
 			{

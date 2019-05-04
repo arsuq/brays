@@ -11,6 +11,11 @@ namespace brays
 		}
 
 		/// <summary>
+		/// The max active dgram processing tasks.
+		/// </summary>
+		public int MaxConcurrentReceives = 5000;
+
+		/// <summary>
 		/// The log configuration.
 		/// </summary>
 		public LogCfg Log;

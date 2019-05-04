@@ -3,9 +3,10 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+
+using System.Linq;
 
 [assembly: InternalsVisibleTo("brays.tests")]
 
@@ -23,6 +24,7 @@ namespace brays
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			inHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
+			ccProcs = new Semaphore(cfg.MaxConcurrentReceives, cfg.MaxConcurrentReceives);
 
 			if (cfg.Log != null)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB);
@@ -42,6 +44,9 @@ namespace brays
 					blockHighway = null;
 					inHighway = null;
 					if (log != null) log.Dispose();
+
+					foreach (var b in blockMap.Values)
+						if (b != null) b.Dispose();
 				}
 				catch { }
 		}
@@ -224,12 +229,14 @@ namespace brays
 			var opt = (byte)FrameOptions.ReqAckBlockTransfer;
 			var frm = new FRAME(fid, b.ID, b.TotalSize, 0, b.TileSize, opt, null);
 			var rsp = false;
+			var fin = false;
+			Span<byte> reqAckDgram = stackalloc byte[FRAME.HEADER];
 
 			var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 			{
 				if ((SignalKind)mark == SignalKind.ACK)
 				{
-					Volatile.Write(ref b.reqAckDgram, null);
+					Volatile.Write(ref fin, true);
 					Volatile.Write(ref rsp, true);
 				}
 
@@ -239,25 +246,23 @@ namespace brays
 
 			if (ackq)
 			{
-				b.reqAckDgram = new byte[FRAME.HEADER];
-				frm.Write(b.reqAckDgram);
+				frm.Write(reqAckDgram);
+				var awaitMS = cfg.RetryDelayMS;
 
 				for (int i = 0; i < cfg.SendRetries; i++)
-					if (Volatile.Read(ref b.reqAckDgram) != null)
+					if (!Volatile.Read(ref fin))
 					{
-						frm.Write(b.reqAckDgram);
-						socket.Send(b.reqAckDgram, SocketFlags.None);
+						socket.Send(reqAckDgram, SocketFlags.None);
 						trace(TraceOps.ReqAck, frm.FrameID, $"B: {b.ID} Total: {b.TotalSize} Tile: {b.TileSize} #{i + 1}");
 
-						if (rst.Wait(cfg.RetryDelayMS)) break;
+						if (rst.Wait(awaitMS)) break;
+
+						awaitMS = (int)(awaitMS * 1.6);
 					}
 					else break;
-
-				Volatile.Write(ref b.reqAckDgram, null);
 			}
 
 			return Volatile.Read(ref rsp);
-
 		}
 
 		void procFrame(MemoryFragment f)
@@ -286,7 +291,11 @@ namespace brays
 			{
 				trace("Ex", ex.Message, ex.ToString());
 			}
-			finally { f.Dispose(); }
+			finally
+			{
+				f.Dispose();
+				ccProcs.Release();
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -467,7 +476,6 @@ namespace brays
 						sa.OnSignal(sg.Mark);
 					}
 					catch { }
-
 				else trace(TraceOps.ProcSignal, sg.FrameID, $"NoAwait M: {sg.Mark} R: {sg.RefID}");
 		}
 
@@ -493,8 +501,11 @@ namespace brays
 			while (Volatile.Read(ref stop) < 1)
 				try
 				{
+					ccProcs.WaitOne();
+
 					var frag = inHighway.Alloc(UDP_MAX);
 					var read = await socket.ReceiveAsync(frag, SocketFlags.None);
+
 					if (read > 0)
 					{
 						Interlocked.Increment(ref receivedDgrams);
@@ -506,6 +517,7 @@ namespace brays
 					}
 					else
 					{
+						trace("Receive", $"Read 0 bytes from socket. Retries: {retries}");
 						frag.Dispose();
 
 						if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
@@ -560,6 +572,8 @@ namespace brays
 
 				while (Volatile.Read(ref stop) < 1 && !b.IsComplete && !b.isFaulted)
 				{
+					await Task.Delay(cfg.WaitForTilesAfterAllSentMS);
+
 					if (b.timeToReqTiles(cfg.WaitForTilesAfterAllSentMS))
 					{
 						trace(TraceOps.ReqTiles, 0, $"B: {b.ID} MT: {b.MarkedTiles}/{b.TilesCount} #{c++}");
@@ -570,8 +584,6 @@ namespace brays
 							status(b.ID, b.MarkedTiles, false, frag);
 						}
 					}
-
-					await Task.Delay(cfg.WaitForTilesAfterAllSentMS);
 				}
 
 				trace(TraceOps.ReqTiles, 0, $"Out-of-ReqTiles B: {b.ID} IsComplete: {b.IsComplete}");
@@ -635,9 +647,11 @@ namespace brays
 			}
 		}
 
+		internal Block[] notComplete() => blockMap.Values.Where(x => !x.IsComplete).ToArray();
 
 		Action<MemoryFragment> onReceived;
 
+		Semaphore ccProcs;
 		HeapHighway outHighway;
 		HeapHighway inHighway;
 		IMemoryHighway blockHighway;

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -73,6 +74,7 @@ namespace brays
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void Mark(int idx, bool upTo)
 		{
 			lock (sync)
@@ -94,6 +96,7 @@ namespace brays
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void Mark(Span<byte> mask)
 		{
 			if (mask.Length == 0) return;
@@ -111,6 +114,7 @@ namespace brays
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal bool timeToReqTiles(int gapMS) =>
 			new TimeSpan(DateTime.Now.Ticks - lastReceivedTileTick).TotalMilliseconds > gapMS;
 
@@ -126,7 +130,6 @@ namespace brays
 		public readonly bool IsIncoming;
 
 		internal readonly BitMask tileMap;
-		internal byte[] reqAckDgram;
 		internal DateTime sentTime = DateTime.MaxValue;
 		internal long lastReceivedTileTick;
 		internal bool isFaulted;
