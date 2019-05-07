@@ -20,32 +20,26 @@ namespace brays
 		ERR
 	}
 
-	enum FrameOptions : byte
-	{
-		None,
-		ReqAckBlockTransfer
-	}
-
 	public enum ErrorCode : int
 	{
-		NoTranferAck,
+		Unknown,
+		Rejected
 	}
 
 	[Flags]
 	public enum TraceOps : int
 	{
 		None = 0,
-		ReqAck = 1,
-		ReqTiles = 2,
-		Beam = 4,
-		Status = 8,
-		Signal = 16,
-		ProcBlock = 32,
-		ProcError = 64,
-		ProcStatus = 128,
-		ProcSignal = 256
+		ReqTiles = 1,
+		Beam = 2,
+		Status = 4,
+		Signal = 8,
+		ProcBlock = 16,
+		ProcError = 32,
+		ProcStatus = 64,
+		ProcSignal = 128
 #if DEBUG
-		,DropFrame = 512
+		, DropFrame = 256
 #endif
 	}
 }

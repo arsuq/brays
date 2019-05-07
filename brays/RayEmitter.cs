@@ -51,6 +51,8 @@ namespace brays
 				catch { }
 		}
 
+		public void Stop() => Volatile.Write(ref stop, 1);
+
 		public void LockOn(IPEndPoint listen, IPEndPoint target)
 		{
 			Volatile.Write(ref isLocked, false);
@@ -72,7 +74,12 @@ namespace brays
 			socket.Bind(this.source);
 			socket.Connect(target);
 			Interlocked.Exchange(ref stop, 0);
-			receiveTask = receive();
+			//receiveTask = receive();
+			Receivers = new Task[20];
+
+			for (int i = 0; i < Receivers.Length; i++)
+				Receivers[i] = receive();
+
 			probingTask = probe();
 			cleanupTask = cleanup();
 			Volatile.Write(ref isLocked, true);
@@ -86,10 +93,6 @@ namespace brays
 			var b = new Block(bid, cfg.TileSize, f);
 
 			if (blockMap.TryAdd(bid, b))
-			{
-				if (b.TilesCount > 1 && !reqack(b))
-					return false;
-
 				try
 				{
 					return await Task.Run(async () =>
@@ -105,7 +108,6 @@ namespace brays
 				{
 					trace("Ex", "Beam", aex.Flatten().ToString());
 				}
-			}
 
 			return false;
 		}
@@ -128,8 +130,14 @@ namespace brays
 			int sent = 0;
 
 			for (int i = 0; i < b.tileMap.Count; i++)
-				if (!b.tileMap[i] && Volatile.Read(ref stop) < 1)
+				if (!b.tileMap[i])
 				{
+					if (Volatile.Read(ref b.isRejected) || Volatile.Read(ref stop) > 0)
+					{
+						trace("Beam", "Stopped");
+						return false;
+					}
+
 					var s = b.Fragment.Span().Slice(i * b.TileSize);
 					if (s.Length > b.TileSize) s = s.Slice(0, b.TileSize);
 
@@ -222,49 +230,6 @@ namespace brays
 			return sent;
 		}
 
-		bool reqack(Block b)
-		{
-			var rst = new ManualResetEventSlim(false);
-			var fid = Interlocked.Increment(ref frameCounter);
-			var opt = (byte)FrameOptions.ReqAckBlockTransfer;
-			var frm = new FRAME(fid, b.ID, b.TotalSize, 0, b.TileSize, opt, null);
-			var rsp = false;
-			var fin = false;
-			Span<byte> reqAckDgram = stackalloc byte[FRAME.HEADER];
-
-			var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
-			{
-				if ((SignalKind)mark == SignalKind.ACK)
-				{
-					Volatile.Write(ref fin, true);
-					Volatile.Write(ref rsp, true);
-				}
-
-				//signalAwaits.TryRemove(fid, out SignalAwait x);
-				rst.Set();
-			}));
-
-			if (ackq)
-			{
-				frm.Write(reqAckDgram);
-				var awaitMS = cfg.RetryDelayMS;
-
-				for (int i = 0; i < cfg.SendRetries; i++)
-					if (!Volatile.Read(ref fin))
-					{
-						socket.Send(reqAckDgram, SocketFlags.None);
-						trace(TraceOps.ReqAck, frm.FrameID, $"B: {b.ID} Total: {b.TotalSize} Tile: {b.TileSize} #{i + 1}");
-
-						if (rst.Wait(awaitMS)) break;
-
-						awaitMS = (int)(awaitMS * 1.6);
-					}
-					else break;
-			}
-
-			return Volatile.Read(ref rsp);
-		}
-
 		void procFrame(MemoryFragment f)
 		{
 			try
@@ -318,30 +283,9 @@ namespace brays
 			if (isClone(TraceOps.ProcBlock, f.FrameID)) return;
 			if (!blockMap.ContainsKey(f.BlockID))
 			{
-				// If it's just one tile there is no need of ReqAck.
-				if (f.TotalSize < cfg.TileSize || f.Options == (byte)FrameOptions.ReqAckBlockTransfer)
-				{
-					// Reject logic + NACK here or:
-					blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, f.Length, blockHighway));
-					signal(f.FrameID, (int)SignalKind.ACK);
-
-					if (f.Options == (byte)FrameOptions.ReqAckBlockTransfer) return;
-				}
-				else
-				{
-					signal(f.FrameID, (int)ErrorCode.NoTranferAck, true);
-					return;
-				}
-			}
-			else
-			{
+				// Reject logic + NACK here or:
+				blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, f.Length, blockHighway));
 				signal(f.FrameID, (int)SignalKind.ACK);
-
-				if (f.Options == (byte)FrameOptions.ReqAckBlockTransfer)
-				{
-					trace(TraceOps.ProcBlock, f.FrameID, $"Multiple REQACKs B: {f.BlockID}");
-					return;
-				}
 			}
 
 			var b = blockMap[f.BlockID];
@@ -383,7 +327,27 @@ namespace brays
 #endif
 
 			if (!isClone(TraceOps.ProcError, sg.FrameID))
-				trace(TraceOps.ProcError, sg.FrameID, $"Code: {sg.Mark} R: [{sg.RefID}.");
+			{
+				var err = (ErrorCode)sg.Mark;
+
+				switch (err)
+				{
+					case ErrorCode.Rejected:
+					{
+						if (blockMap.TryGetValue(sg.RefID, out Block b))
+						{
+							Volatile.Write(ref b.isRejected, true);
+							trace(TraceOps.ProcError, sg.FrameID, $"Rejected B: [{sg.RefID}.");
+						}
+
+						break;
+					}
+					case ErrorCode.Unknown:
+					default:
+					trace(TraceOps.ProcError, sg.FrameID, $"Unknown code M: {sg.Mark} R: [{sg.RefID}.");
+					break;
+				}
+			}
 		}
 
 		void procStatus(MemoryFragment frag)
@@ -570,11 +534,11 @@ namespace brays
 			{
 				int c = 0;
 
-				while (Volatile.Read(ref stop) < 1 && !b.IsComplete && !b.isFaulted)
+				while (Volatile.Read(ref stop) < 1 && !b.IsComplete && !b.isFaulted && !b.isRejected)
 				{
-					await Task.Delay(cfg.WaitForTilesAfterAllSentMS);
+					await Task.Delay(cfg.WaitAfterAllSentMS);
 
-					if (b.timeToReqTiles(cfg.WaitForTilesAfterAllSentMS))
+					if (b.timeToReqTiles(cfg.WaitAfterAllSentMS) && b.RemainingTiles > 0)
 					{
 						trace(TraceOps.ReqTiles, 0, $"B: {b.ID} MT: {b.MarkedTiles}/{b.TilesCount} #{c++}");
 
@@ -602,7 +566,6 @@ namespace brays
 				string ttl = string.Empty;
 				switch (op)
 				{
-					case TraceOps.ReqAck:
 					case TraceOps.Beam:
 					case TraceOps.Status:
 					case TraceOps.Signal:
@@ -675,6 +638,7 @@ namespace brays
 		Task probingTask;
 		Task receiveTask;
 		Task cleanupTask;
+		Task[] Receivers;
 
 		ConcurrentDictionary<int, SignalAwait> signalAwaits = new ConcurrentDictionary<int, SignalAwait>();
 		ConcurrentDictionary<int, Block> blockMap = new ConcurrentDictionary<int, Block>();

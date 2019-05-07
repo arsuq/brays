@@ -116,10 +116,11 @@ namespace brays
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal bool timeToReqTiles(int gapMS) =>
-			new TimeSpan(DateTime.Now.Ticks - lastReceivedTileTick).TotalMilliseconds > gapMS;
+			new TimeSpan(DateTime.Now.Ticks - Volatile.Read(ref lastReceivedTileTick)).TotalMilliseconds > gapMS;
 
 		public MemoryFragment Fragment => fragment;
 		public int MarkedTiles => Volatile.Read(ref markedTiles);
+		public int RemainingTiles => TilesCount - Volatile.Read(ref markedTiles);
 		public bool IsComplete => tileMap.IsComplete();
 		public bool HasAllTiles => MarkedTiles == TilesCount;
 
@@ -133,6 +134,7 @@ namespace brays
 		internal DateTime sentTime = DateTime.MaxValue;
 		internal long lastReceivedTileTick;
 		internal bool isFaulted;
+		internal bool isRejected;
 		internal int isOnCompleteTriggered;
 
 		internal Task requestTiles;

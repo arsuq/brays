@@ -13,7 +13,7 @@ namespace brays
 		/// <summary>
 		/// The max active dgram processing tasks.
 		/// </summary>
-		public int MaxConcurrentReceives = 5000;
+		public int MaxConcurrentReceives = 400;
 
 		/// <summary>
 		/// The log configuration.
@@ -102,7 +102,7 @@ namespace brays
 		/// In practice the last few tiles of a block will arrive after the all-sent status signal,
 		/// so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
 		/// </remarks>
-		public int WaitForTilesAfterAllSentMS = 1000;
+		public int WaitAfterAllSentMS = 400;
 
 		/// <summary>
 		/// Where the blocks are assembled.
