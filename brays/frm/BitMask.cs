@@ -120,11 +120,14 @@ namespace brays
 		public string ToBinaryString()
 		{
 			var sb = new StringBuilder();
+			var i = 0;
 
 			foreach (var tile in tiles)
 			{
 				var M = Convert.ToString(tile, 2);
-				sb.Append(MASK.Substring(0, 32 - M.Length) + M);
+
+				if (++i < tiles.Length) sb.Append(MASK.Substring(0, 32 - M.Length) + M);
+				else sb.Append(M);
 			}
 
 			return sb.ToString();
