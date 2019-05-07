@@ -11,9 +11,14 @@ namespace brays
 		}
 
 		/// <summary>
+		/// The concurrent socket listeners.
+		/// </summary>
+		public int MaxConcurrentReceives = 10;
+
+		/// <summary>
 		/// The max active dgram processing tasks.
 		/// </summary>
-		public int MaxConcurrentReceives = 400;
+		public int MaxConcurrentProcs = 400;
 
 		/// <summary>
 		/// The log configuration.

@@ -22,9 +22,8 @@ namespace brays
 			this.onReceived = onReceived;
 			this.cfg = cfg;
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
-			inHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
-			ccProcs = new Semaphore(cfg.MaxConcurrentReceives, cfg.MaxConcurrentReceives);
+			ccProcs = new Semaphore(cfg.MaxConcurrentProcs, cfg.MaxConcurrentProcs);
 
 			if (cfg.Log != null)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB);
@@ -38,11 +37,9 @@ namespace brays
 					Interlocked.Exchange(ref stop, 1);
 					outHighway.Dispose();
 					blockHighway.Dispose();
-					inHighway.Dispose();
 					socket.Dispose();
 					outHighway = null;
 					blockHighway = null;
-					inHighway = null;
 					if (log != null) log.Dispose();
 
 					foreach (var b in blockMap.Values)
@@ -63,9 +60,13 @@ namespace brays
 			if (socket != null)
 			{
 				Interlocked.Exchange(ref stop, 1);
-				receiveTask?.Dispose();
 				probingTask?.Dispose();
 				cleanupTask?.Dispose();
+
+				if (receivers != null)
+					foreach (var r in receivers)
+						r.Dispose();
+
 				socket.Close();
 			}
 
@@ -74,11 +75,10 @@ namespace brays
 			socket.Bind(this.source);
 			socket.Connect(target);
 			Interlocked.Exchange(ref stop, 0);
-			//receiveTask = receive();
-			Receivers = new Task[20];
+			receivers = new Task[cfg.MaxConcurrentReceives];
 
-			for (int i = 0; i < Receivers.Length; i++)
-				Receivers[i] = receive();
+			for (int i = 0; i < receivers.Length; i++)
+				receivers[i] = receive();
 
 			probingTask = probe();
 			cleanupTask = cleanup();
@@ -283,9 +283,9 @@ namespace brays
 			if (isClone(TraceOps.ProcBlock, f.FrameID)) return;
 			if (!blockMap.ContainsKey(f.BlockID))
 			{
-				// Reject logic + NACK here or:
-				blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, f.Length, blockHighway));
-				signal(f.FrameID, (int)SignalKind.ACK);
+				// Reject logic + Error or:
+				if (blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, f.Length, blockHighway)))
+					signal(f.FrameID, (int)SignalKind.ACK);
 			}
 
 			var b = blockMap[f.BlockID];
@@ -462,36 +462,37 @@ namespace brays
 
 		async Task receive()
 		{
-			while (Volatile.Read(ref stop) < 1)
-				try
-				{
-					ccProcs.WaitOne();
-
-					var frag = inHighway.Alloc(UDP_MAX);
-					var read = await socket.ReceiveAsync(frag, SocketFlags.None);
-
-					if (read > 0)
+			using (var inHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX))
+				while (Volatile.Read(ref stop) < 1)
+					try
 					{
-						Interlocked.Increment(ref receivedDgrams);
+						ccProcs.WaitOne();
 
-						if (read == 1) procFrame(frag);
-						new Task((mf) => procFrame((MemoryFragment)mf), frag).Start();
+						var frag = inHighway.Alloc(UDP_MAX);
+						var read = await socket.ReceiveAsync(frag, SocketFlags.None);
 
-						if (Volatile.Read(ref retries) > 0) Volatile.Write(ref retries, 0);
+						if (read > 0)
+						{
+							Interlocked.Increment(ref receivedDgrams);
+
+							if (read == 1) procFrame(frag);
+							new Task((mf) => procFrame((MemoryFragment)mf), frag).Start();
+
+							if (Volatile.Read(ref retries) > 0) Volatile.Write(ref retries, 0);
+						}
+						else
+						{
+							trace("Receive", $"Read 0 bytes from socket. Retries: {retries}");
+							frag.Dispose();
+
+							if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
+							else await Task.Delay(cfg.ErrorAwaitMS);
+						}
 					}
-					else
+					catch (Exception ex)
 					{
-						trace("Receive", $"Read 0 bytes from socket. Retries: {retries}");
-						frag.Dispose();
-
-						if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
-						else await Task.Delay(cfg.ErrorAwaitMS);
+						Interlocked.Exchange(ref exception, ex);
 					}
-				}
-				catch (Exception ex)
-				{
-					Interlocked.Exchange(ref exception, ex);
-				}
 
 			trace("Receive", "Not listening.");
 			Interlocked.Exchange(ref stop, 1);
@@ -616,7 +617,6 @@ namespace brays
 
 		Semaphore ccProcs;
 		HeapHighway outHighway;
-		HeapHighway inHighway;
 		IMemoryHighway blockHighway;
 		EmitterCfg cfg;
 		IPEndPoint target;
@@ -636,9 +636,8 @@ namespace brays
 
 		Exception exception;
 		Task probingTask;
-		Task receiveTask;
 		Task cleanupTask;
-		Task[] Receivers;
+		Task[] receivers;
 
 		ConcurrentDictionary<int, SignalAwait> signalAwaits = new ConcurrentDictionary<int, SignalAwait>();
 		ConcurrentDictionary<int, Block> blockMap = new ConcurrentDictionary<int, Block>();
