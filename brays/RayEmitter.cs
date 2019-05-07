@@ -237,6 +237,10 @@ namespace brays
 				Volatile.Write(ref lastReceivedDgramTick, DateTime.Now.Ticks);
 				var lead = (Lead)f.Span()[0];
 
+#if DEBUG
+				Interlocked.Increment(ref ccProcsCount);
+#endif
+
 				switch (lead)
 				{
 					case Lead.Probe: procProbe(); break;
@@ -260,6 +264,12 @@ namespace brays
 			{
 				f.Dispose();
 				ccProcs.Release();
+
+#if DEBUG
+				var cc = Interlocked.Decrement(ref ccProcsCount);
+				trace("ccProcs", cc.ToString());
+#endif
+
 			}
 		}
 
@@ -623,6 +633,10 @@ namespace brays
 		IPEndPoint source;
 		Socket socket;
 		Log log;
+
+#if DEBUG
+		int ccProcsCount;
+#endif
 
 		int frameCounter;
 		int blockCounter;

@@ -13,12 +13,12 @@ namespace brays
 		/// <summary>
 		/// The concurrent socket listeners.
 		/// </summary>
-		public int MaxConcurrentReceives = 10;
+		public int MaxConcurrentReceives = 15;
 
 		/// <summary>
 		/// The max active dgram processing tasks.
 		/// </summary>
-		public int MaxConcurrentProcs = 400;
+		public int MaxConcurrentProcs = 800;
 
 		/// <summary>
 		/// The log configuration.
@@ -118,7 +118,7 @@ namespace brays
 		internal bool dropFrame()
 		{
 			if (!dropFrames) return false;
-			lock (rdm) return rdm.Next(100) > (100 - deopFramePercent);
+			lock (rdm) return rdm.Next(100) < deopFramePercent;
 		}
 
 		internal Random rdm = new Random();

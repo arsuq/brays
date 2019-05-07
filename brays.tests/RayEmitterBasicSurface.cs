@@ -21,11 +21,11 @@ namespace brays.tests
 			//			await oneMeg();
 			//#if DEBUG
 			//			await missingTiles();
-						await M30();
+			//			await M30();
 			//#endif
 
-			//for (int i = 0; i < 4; i++)
-			//	await halfGigNoLogNoVerify();
+			for (int i = 0; i < 4; i++)
+				await halfGigNoLogNoVerify();
 		}
 
 		async Task oneByteDgram()
@@ -499,12 +499,12 @@ namespace brays.tests
 
 				rayA = new RayEmitter((f) => { }, new EmitterCfg()
 				{
-					Log = new LogCfg("rayA", true, traceops),
+					//Log = new LogCfg("rayA", true, traceops),
 					TileSize = 60000
 				});
 				rayB = new RayEmitter(receive, new EmitterCfg()
 				{
-					Log = new LogCfg("rayB", true, traceops),
+					//Log = new LogCfg("rayB", true, traceops),
 					TileSize = 60000
 				});
 
