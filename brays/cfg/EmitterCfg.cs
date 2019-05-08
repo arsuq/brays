@@ -13,17 +13,12 @@ namespace brays
 		/// <summary>
 		/// Prevents dgram losses and re-beams.
 		/// </summary>
-		public int BeamsPerSec = 4000; 
+		public int MaxBeamedTilesAtOnce = 2;
 
 		/// <summary>
 		/// The concurrent socket listeners.
 		/// </summary>
-		public int MaxConcurrentReceives = 50;
-
-		/// <summary>
-		/// The max active dgram processing tasks.
-		/// </summary>
-		public int MaxConcurrentProcs = 800;
+		public int MaxConcurrentReceives = 20;
 
 		/// <summary>
 		/// The log configuration.
@@ -112,7 +107,7 @@ namespace brays
 		/// In practice the last few tiles of a block will arrive after the all-sent status signal,
 		/// so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
 		/// </remarks>
-		public int WaitAfterAllSentMS = 2000;
+		public int WaitAfterAllSentMS = 800;
 
 		/// <summary>
 		/// Where the blocks are assembled.

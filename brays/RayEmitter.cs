@@ -23,7 +23,6 @@ namespace brays
 			this.cfg = cfg;
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
-			ccProcs = new Semaphore(cfg.MaxConcurrentProcs, cfg.MaxConcurrentProcs);
 
 			if (cfg.Log != null)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB);
@@ -71,9 +70,11 @@ namespace brays
 			}
 
 			socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-
 			socket.Bind(this.source);
 			socket.Connect(target);
+
+			// 2d0: set socket options
+
 			Interlocked.Exchange(ref stop, 0);
 			receivers = new Task[cfg.MaxConcurrentReceives];
 
@@ -124,14 +125,11 @@ namespace brays
 
 		bool beam(Block b)
 		{
-			Interlocked.CompareExchange(ref lastBeamBurstTick, DateTime.Now.Ticks, 0);
-			var beamTick = Volatile.Read(ref lastBeamBurstTick);
 			int sent = 0;
 
-			try
-			{
-				for (int i = 0; i < b.tileMap.Count; i++)
-					if (!b.tileMap[i])
+			for (int i = 0; i < b.tileMap.Count; i++)
+				if (!b.tileMap[i])
+					try
 					{
 						if (Volatile.Read(ref b.isRejected) || Volatile.Read(ref stop) > 0)
 						{
@@ -139,21 +137,21 @@ namespace brays
 							return false;
 						}
 
-						var ccb = Interlocked.Increment(ref ccBeams);
-						var bmt = new DateTime(beamTick);
-						var bps = ccb / DateTime.Now.Subtract(bmt).TotalSeconds;
+						var cc = Volatile.Read(ref ccBeams);
 
-						while (bps > cfg.BeamsPerSec)
+						while (cc > cfg.MaxBeamedTilesAtOnce)
 						{
-							Thread.Sleep(20);
-							bps = ccb / DateTime.Now.Subtract(bmt).TotalSeconds;
+							cc = Volatile.Read(ref ccBeams);
+							Thread.Sleep(10);
 						}
 
-						var s = b.Fragment.Span().Slice(i * b.TileSize);
-						if (s.Length > b.TileSize) s = s.Slice(0, b.TileSize);
+						Interlocked.Increment(ref ccBeams);
+
+						var data = b.Fragment.Span().Slice(i * b.TileSize);
+						if (data.Length > b.TileSize) data = data.Slice(0, b.TileSize);
 
 						var fid = Interlocked.Increment(ref frameCounter);
-						var f = new FRAME(fid, b.ID, b.TotalSize, i, b.TileSize, 0, s);
+						var f = new FRAME(fid, b.ID, b.TotalSize, i, b.TileSize, 0, data);
 
 						using (var mf = outHighway.Alloc(f.LENGTH))
 						{
@@ -161,28 +159,27 @@ namespace brays
 							f.Write(dgram);
 							var sbytes = socket.Send(dgram);
 
-							if (sbytes != dgram.Length)
+							if (sbytes == dgram.Length)
 							{
-								b.isFaulted = true;
-								trace(TraceOps.Beam, fid, $"Faulted for sending {sbytes} of {dgram.Length} byte dgram.");
+								trace(TraceOps.Beam, fid, $"{sbytes} B: {b.ID} T: {i}");
 								sent++;
+							}
+							else
+							{
+								trace(TraceOps.Beam, fid, $"Faulted for sending {sbytes} of {dgram.Length} byte dgram.");
+								b.isFaulted = true;
 								return false;
 							}
-
-							trace(TraceOps.Beam, fid, $"{sbytes} B: {b.ID} T: {i}");
-							sent++;
 						}
 					}
-			}
-			catch (Exception ex)
-			{
-				trace("Ex", ex.Message, ex.StackTrace);
-			}
-			finally
-			{
-				if (Interlocked.Add(ref ccBeams, -sent) == 0)
-					Volatile.Write(ref lastBeamBurstTick, 0);
-			}
+					catch (Exception ex)
+					{
+						trace("Ex", ex.Message, ex.StackTrace);
+					}
+					finally
+					{
+						Interlocked.Decrement(ref ccBeams);
+					}
 
 			b.sentTime = DateTime.Now;
 			return status(b.ID, sent, true, null);
@@ -258,9 +255,9 @@ namespace brays
 				Volatile.Write(ref lastReceivedDgramTick, DateTime.Now.Ticks);
 				var lead = (Lead)f.Span()[0];
 
-#if DEBUG
-				//Interlocked.Increment(ref ccProcsCount);
-#endif
+//#if DEBUG
+//				var cc = Interlocked.Increment(ref ccProcsCount);
+//#endif
 
 				switch (lead)
 				{
@@ -284,10 +281,9 @@ namespace brays
 			finally
 			{
 				f.Dispose();
-				ccProcs.Release();
 
 #if DEBUG
-				//var cc = Interlocked.Decrement(ref ccProcsCount);
+				//Interlocked.Decrement(ref ccProcsCount);
 				//trace("ccProcs", cc.ToString());
 #endif
 
@@ -497,8 +493,6 @@ namespace brays
 				while (Volatile.Read(ref stop) < 1)
 					try
 					{
-						ccProcs.WaitOne();
-
 						var frag = inHighway.Alloc(UDP_MAX);
 						var read = await socket.ReceiveAsync(frag, SocketFlags.None);
 
@@ -646,7 +640,6 @@ namespace brays
 
 		Action<MemoryFragment> onReceived;
 
-		Semaphore ccProcs;
 		HeapHighway outHighway;
 		IMemoryHighway blockHighway;
 		EmitterCfg cfg;
