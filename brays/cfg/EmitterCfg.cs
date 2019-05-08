@@ -11,14 +11,24 @@ namespace brays
 		}
 
 		/// <summary>
+		/// The default value is ushort.MaxValue * 200
+		/// </summary>
+		public int ReceiveBufferSize = ushort.MaxValue * 200;
+
+		/// <summary>
+		/// The default value is ushort.MaxValue * 200
+		/// </summary>
+		public int SendBufferSize = ushort.MaxValue * 200;
+
+		/// <summary>
 		/// Prevents dgram losses and re-beams.
 		/// </summary>
-		public int MaxBeamedTilesAtOnce = 2;
+		public int MaxBeamedTilesAtOnce = 3;
 
 		/// <summary>
 		/// The concurrent socket listeners.
 		/// </summary>
-		public int MaxConcurrentReceives = 20;
+		public int MaxConcurrentReceives = Environment.ProcessorCount * 2;
 
 		/// <summary>
 		/// The log configuration.

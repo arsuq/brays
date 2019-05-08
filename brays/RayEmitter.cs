@@ -72,6 +72,8 @@ namespace brays
 			socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 			socket.Bind(this.source);
 			socket.Connect(target);
+			socket.ReceiveBufferSize = cfg.ReceiveBufferSize;
+			socket.SendBufferSize = cfg.SendBufferSize;
 
 			// 2d0: set socket options
 
