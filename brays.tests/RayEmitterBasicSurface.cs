@@ -495,7 +495,7 @@ namespace brays.tests
 					}
 				}
 
-				var traceops = TraceOps.ReqTiles;
+				var traceops = (TraceOps.ReqTiles | TraceOps.CfgX | TraceOps.ProcCfgX);
 
 				rayA = new RayEmitter((f) => { }, new EmitterCfg()
 				{

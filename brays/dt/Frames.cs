@@ -28,7 +28,7 @@ namespace brays
 			TileIndex = BitConverter.ToInt32(s.Slice(13));
 			Length = BitConverter.ToUInt16(s.Slice(17));
 			Options = s[19];
-			Data = s.Slice(20);
+			Data = s.Slice(HEADER);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -41,7 +41,7 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(13), TileIndex);
 			BitConverter.TryWriteBytes(s.Slice(17), Length);
 			s[19] = Options;
-			Data.CopyTo(s.Slice(20));
+			Data.CopyTo(s.Slice(HEADER));
 		}
 
 		public readonly byte Kind;
@@ -109,7 +109,7 @@ namespace brays
 			FrameID = BitConverter.ToInt32(s.Slice(1));
 			BlockID = BitConverter.ToInt32(s.Slice(5));
 			TileCount = BitConverter.ToInt32(s.Slice(9));
-			TileMap = s.Slice(13);
+			TileMap = s.Slice(HEADER);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -119,7 +119,7 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(1), FrameID);
 			BitConverter.TryWriteBytes(s.Slice(5), BlockID);
 			BitConverter.TryWriteBytes(s.Slice(9), TileCount);
-			TileMap.CopyTo(s.Slice(13));
+			TileMap.CopyTo(s.Slice(HEADER));
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -129,7 +129,7 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(1), fid);
 			BitConverter.TryWriteBytes(s.Slice(5), bid);
 			BitConverter.TryWriteBytes(s.Slice(9), tc);
-			if (map != null) map.CopyTo(s.Slice(13));
+			if (map != null) map.CopyTo(s.Slice(HEADER));
 		}
 
 		public readonly byte Kind;
@@ -140,5 +140,41 @@ namespace brays
 
 		public const int HEADER = 13;
 		public int LENGTH => HEADER + (TileMap != null ? TileMap.Length : 0);
+	}
+
+	readonly ref struct CFGX
+	{
+		public CFGX(int fid, ushort l, Span<byte> s)
+		{
+			Kind = (byte)Lead.CfgX;
+			FrameID = fid;
+			Length = s.Length > 0 ? (ushort)s.Length : l;
+			Data = s;
+		}
+
+		public CFGX(Span<byte> s)
+		{
+			Kind = s[0];
+			FrameID = BitConverter.ToInt32(s.Slice(1));
+			Length = BitConverter.ToUInt16(s.Slice(5));
+			Data = s.Slice(HEADER);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void Write(Span<byte> s)
+		{
+			s[0] = Kind;
+			BitConverter.TryWriteBytes(s.Slice(1), FrameID);
+			BitConverter.TryWriteBytes(s.Slice(5), Length);
+			Data.CopyTo(s.Slice(HEADER));
+		}
+
+		public readonly byte Kind;
+		public readonly int FrameID;
+		public readonly ushort Length;
+		public readonly Span<byte> Data;
+
+		public const int HEADER = 7;
+		public int LENGTH => HEADER + Data.Length;
 	}
 }

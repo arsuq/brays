@@ -10,6 +10,7 @@ namespace brays
 		Error,
 		Block,
 		Status,
+		CfgX
 	}
 
 	enum SignalKind : int
@@ -30,16 +31,18 @@ namespace brays
 	public enum TraceOps : int
 	{
 		None = 0,
-		ReqTiles = 1,
-		Beam = 2,
-		Status = 4,
-		Signal = 8,
-		ProcBlock = 16,
-		ProcError = 32,
-		ProcStatus = 64,
-		ProcSignal = 128
+		CfgX = 1,
+		ReqTiles = 2,
+		Beam = 4,
+		Status = 8,
+		Signal = 16,
+		ProcBlock = 32,
+		ProcError = 64,
+		ProcStatus = 128,
+		ProcSignal = 256,
+		ProcCfgX = 512
 #if DEBUG
-		, DropFrame = 256
+		, DropFrame = 1024
 #endif
 	}
 }

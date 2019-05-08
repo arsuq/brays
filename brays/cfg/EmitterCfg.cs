@@ -60,7 +60,7 @@ namespace brays
 		/// <summary>
 		/// The SendRetries loop await. 
 		/// </summary>
-		public int RetryDelayMS = 400;
+		public int RetryDelayMS = 800;
 
 		/// <summary>
 		/// The cleanup triggering frequency.
@@ -107,7 +107,7 @@ namespace brays
 		/// In practice the last few tiles of a block will arrive after the all-sent status signal,
 		/// so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
 		/// </remarks>
-		public int WaitAfterAllSentMS = 800;
+		public int WaitAfterAllSentMS = 1400;
 
 		/// <summary>
 		/// Where the blocks are assembled.

@@ -49,7 +49,7 @@ namespace brays
 
 		public void Stop() => Volatile.Write(ref stop, 1);
 
-		public void LockOn(IPEndPoint listen, IPEndPoint target)
+		public bool LockOn(IPEndPoint listen, IPEndPoint target, bool configexchange = false)
 		{
 			Volatile.Write(ref isLocked, false);
 
@@ -85,8 +85,18 @@ namespace brays
 			cleanupTask = cleanup();
 			Volatile.Write(ref isLocked, true);
 
+			if (configexchange)
+			{
+				if (!configx()) return false;
+
+				// 2d0: settings update
+			}
+
 			trace("Lock-on", $"{source.ToString()} target: {target.ToString()}");
+			return true;
 		}
+
+		public bool ConfigExchange() => configx();
 
 		public async Task<bool> Beam(MemoryFragment f)
 		{
@@ -248,16 +258,49 @@ namespace brays
 			return sent;
 		}
 
+		bool configx()
+		{
+			if (Volatile.Read(ref stop) > 0) return false;
+
+			var rst = new ManualResetEventSlim(false);
+			var cfgx = new CfgX(cfg);
+			var fid = Interlocked.Increment(ref frameCounter);
+			var len = CfgX.LENGTH + CFGX.HEADER;
+			var rsp = false;
+			Span<byte> s = stackalloc byte[len];
+			cfgx.Write(s.Slice(CFGX.HEADER));
+			var dgram = new CFGX(fid, 0, s.Slice(CFGX.HEADER));
+			dgram.Write(s);
+
+			var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
+			{
+				if ((SignalKind)mark == SignalKind.ACK)
+					Volatile.Write(ref rsp, true);
+
+				rst.Set();
+			}));
+
+			if (ackq)
+			{
+				for (int i = 0; i < cfg.SendRetries; i++)
+				{
+					var sent = socket.Send(s, SocketFlags.None);
+
+					if (sent == 0) trace(TraceOps.CfgX, fid, "Socket sent 0 bytes");
+					else trace(TraceOps.CfgX, fid, $"#{i + 1}");
+					if (rst.Wait(cfg.RetryDelayMS)) break;
+				}
+			}
+
+			return Volatile.Read(ref rsp);
+		}
+
 		void procFrame(MemoryFragment f)
 		{
 			try
 			{
 				Volatile.Write(ref lastReceivedDgramTick, DateTime.Now.Ticks);
 				var lead = (Lead)f.Span()[0];
-
-//#if DEBUG
-//				var cc = Interlocked.Increment(ref ccProcsCount);
-//#endif
 
 				switch (lead)
 				{
@@ -266,6 +309,7 @@ namespace brays
 					case Lead.Error: procError(f); break;
 					case Lead.Block: procBlock(f); break;
 					case Lead.Status: procStatus(f); break;
+					case Lead.CfgX: procCfgX(f); break;
 					default:
 					break;
 				}
@@ -281,12 +325,6 @@ namespace brays
 			finally
 			{
 				f.Dispose();
-
-#if DEBUG
-				//Interlocked.Decrement(ref ccProcsCount);
-				//trace("ccProcs", cc.ToString());
-#endif
-
 			}
 		}
 
@@ -296,6 +334,28 @@ namespace brays
 			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
 			signal(0, (byte)SignalKind.ACK, false, false);
 		}
+
+		void procCfgX(MemoryFragment frag)
+		{
+			var f = new CFGX(frag.Span());
+#if DEBUG
+			if (cfg.dropFrame())
+			{
+				trace(TraceOps.DropFrame, f.FrameID, "CfgX");
+				return;
+			}
+#endif
+			if (isClone(TraceOps.CfgX, f.FrameID, false)) return;
+
+			var tcfg = new CfgX(f.Data);
+			var oldc = Interlocked.CompareExchange(ref targetCfg, tcfg, null);
+			signal(f.FrameID, (int)SignalKind.ACK, false);
+			trace(TraceOps.ProcCfgX, f.FrameID,
+				$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxReceivers: {tcfg.MaxConcurrentReceives}");
+
+			if (oldc == null) configx();
+		}
+
 
 		void procBlock(MemoryFragment frag)
 		{
@@ -595,6 +655,7 @@ namespace brays
 					case TraceOps.Beam:
 					case TraceOps.Status:
 					case TraceOps.Signal:
+					case TraceOps.CfgX:
 					ttl = string.Format("{0,10}:o {1, -12} {2}", frame, op, title);
 					break;
 					case TraceOps.ReqTiles:
@@ -604,6 +665,7 @@ namespace brays
 					case TraceOps.ProcError:
 					case TraceOps.ProcStatus:
 					case TraceOps.ProcSignal:
+					case TraceOps.ProcCfgX:
 					ttl = string.Format("{0,10}:i {1, -12} {2}", frame, op, title);
 					break;
 #if DEBUG
@@ -669,6 +731,7 @@ namespace brays
 		Task probingTask;
 		Task cleanupTask;
 		Task[] receivers;
+		CfgX targetCfg;
 
 		ConcurrentDictionary<int, SignalAwait> signalAwaits = new ConcurrentDictionary<int, SignalAwait>();
 		ConcurrentDictionary<int, Block> blockMap = new ConcurrentDictionary<int, Block>();
