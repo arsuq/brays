@@ -11,9 +11,14 @@ namespace brays
 		}
 
 		/// <summary>
+		/// Prevents dgram losses and re-beams.
+		/// </summary>
+		public int BeamsPerSec = 4000; 
+
+		/// <summary>
 		/// The concurrent socket listeners.
 		/// </summary>
-		public int MaxConcurrentReceives = 15;
+		public int MaxConcurrentReceives = 50;
 
 		/// <summary>
 		/// The max active dgram processing tasks.
@@ -40,7 +45,7 @@ namespace brays
 		/// The desired dgram size. It's used for all block exchanges.
 		/// The default value is 40K.
 		/// </summary>
-		public ushort TileSize = 40_000;
+		public ushort TileSizeBytes = 40_000;
 
 		/// <summary>
 		/// This is the receive loop error sleep between retries.
@@ -107,7 +112,7 @@ namespace brays
 		/// In practice the last few tiles of a block will arrive after the all-sent status signal,
 		/// so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
 		/// </remarks>
-		public int WaitAfterAllSentMS = 400;
+		public int WaitAfterAllSentMS = 2000;
 
 		/// <summary>
 		/// Where the blocks are assembled.

@@ -90,7 +90,7 @@ namespace brays
 		public async Task<bool> Beam(MemoryFragment f)
 		{
 			var bid = Interlocked.Increment(ref blockCounter);
-			var b = new Block(bid, cfg.TileSize, f);
+			var b = new Block(bid, cfg.TileSizeBytes, f);
 
 			if (blockMap.TryAdd(bid, b))
 				try
@@ -124,44 +124,65 @@ namespace brays
 
 		bool beam(Block b)
 		{
-			if (b == null) throw new ArgumentNullException();
-			if (cfg.TileSize != b.TileSize) throw new ArgumentException("TileSize mismatch");
-
+			Interlocked.CompareExchange(ref lastBeamBurstTick, DateTime.Now.Ticks, 0);
+			var beamTick = Volatile.Read(ref lastBeamBurstTick);
 			int sent = 0;
 
-			for (int i = 0; i < b.tileMap.Count; i++)
-				if (!b.tileMap[i])
-				{
-					if (Volatile.Read(ref b.isRejected) || Volatile.Read(ref stop) > 0)
+			try
+			{
+				for (int i = 0; i < b.tileMap.Count; i++)
+					if (!b.tileMap[i])
 					{
-						trace("Beam", "Stopped");
-						return false;
-					}
-
-					var s = b.Fragment.Span().Slice(i * b.TileSize);
-					if (s.Length > b.TileSize) s = s.Slice(0, b.TileSize);
-
-					var fid = Interlocked.Increment(ref frameCounter);
-					var f = new FRAME(fid, b.ID, b.TotalSize, i, b.TileSize, 0, s);
-
-					using (var mf = outHighway.Alloc(f.LENGTH))
-					{
-						var dgram = mf.Span();
-						f.Write(dgram);
-						var sbytes = socket.Send(dgram);
-
-						if (sbytes != dgram.Length)
+						if (Volatile.Read(ref b.isRejected) || Volatile.Read(ref stop) > 0)
 						{
-							b.isFaulted = true;
-							trace(TraceOps.Beam, fid, $"Faulted for sending {sbytes} of {dgram.Length} byte dgram.");
-
+							trace("Beam", "Stopped");
 							return false;
 						}
 
-						trace(TraceOps.Beam, fid, $"{sbytes} B: {b.ID} T: {i}");
-						sent++;
+						var ccb = Interlocked.Increment(ref ccBeams);
+						var bmt = new DateTime(beamTick);
+						var bps = ccb / DateTime.Now.Subtract(bmt).TotalSeconds;
+
+						while (bps > cfg.BeamsPerSec)
+						{
+							Thread.Sleep(20);
+							bps = ccb / DateTime.Now.Subtract(bmt).TotalSeconds;
+						}
+
+						var s = b.Fragment.Span().Slice(i * b.TileSize);
+						if (s.Length > b.TileSize) s = s.Slice(0, b.TileSize);
+
+						var fid = Interlocked.Increment(ref frameCounter);
+						var f = new FRAME(fid, b.ID, b.TotalSize, i, b.TileSize, 0, s);
+
+						using (var mf = outHighway.Alloc(f.LENGTH))
+						{
+							var dgram = mf.Span();
+							f.Write(dgram);
+							var sbytes = socket.Send(dgram);
+
+							if (sbytes != dgram.Length)
+							{
+								b.isFaulted = true;
+								trace(TraceOps.Beam, fid, $"Faulted for sending {sbytes} of {dgram.Length} byte dgram.");
+								sent++;
+								return false;
+							}
+
+							trace(TraceOps.Beam, fid, $"{sbytes} B: {b.ID} T: {i}");
+							sent++;
+						}
 					}
-				}
+			}
+			catch (Exception ex)
+			{
+				trace("Ex", ex.Message, ex.StackTrace);
+			}
+			finally
+			{
+				if (Interlocked.Add(ref ccBeams, -sent) == 0)
+					Volatile.Write(ref lastBeamBurstTick, 0);
+			}
 
 			b.sentTime = DateTime.Now;
 			return status(b.ID, sent, true, null);
@@ -238,7 +259,7 @@ namespace brays
 				var lead = (Lead)f.Span()[0];
 
 #if DEBUG
-				Interlocked.Increment(ref ccProcsCount);
+				//Interlocked.Increment(ref ccProcsCount);
 #endif
 
 				switch (lead)
@@ -266,8 +287,8 @@ namespace brays
 				ccProcs.Release();
 
 #if DEBUG
-				var cc = Interlocked.Decrement(ref ccProcsCount);
-				trace("ccProcs", cc.ToString());
+				//var cc = Interlocked.Decrement(ref ccProcsCount);
+				//trace("ccProcs", cc.ToString());
 #endif
 
 			}
@@ -637,6 +658,9 @@ namespace brays
 #if DEBUG
 		int ccProcsCount;
 #endif
+
+		int ccBeams;
+		long lastBeamBurstTick;
 
 		int frameCounter;
 		int blockCounter;

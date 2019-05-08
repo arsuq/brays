@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace brays
 {
+	// [!] Magic numbers ahead
+
 	readonly ref struct FRAME
 	{
 		public FRAME(int fid, int bid, int ts, int ti, ushort l, byte o, Span<byte> s)
@@ -28,6 +31,7 @@ namespace brays
 			Data = s.Slice(20);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Write(Span<byte> s)
 		{
 			s[0] = Kind;
@@ -71,6 +75,7 @@ namespace brays
 			Mark = BitConverter.ToInt32(s.Slice(9));
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Write(Span<byte> s)
 		{
 			s[0] = Kind;
@@ -107,6 +112,7 @@ namespace brays
 			TileMap = s.Slice(13);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Write(Span<byte> s)
 		{
 			s[0] = Kind;
@@ -116,6 +122,7 @@ namespace brays
 			TileMap.CopyTo(s.Slice(13));
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Make(int fid, int bid, int tc, Span<byte> map, Span<byte> s)
 		{
 			s[0] = (byte)Lead.Status;

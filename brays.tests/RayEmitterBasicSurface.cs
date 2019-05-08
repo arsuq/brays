@@ -495,17 +495,17 @@ namespace brays.tests
 					}
 				}
 
-				var traceops = (TraceOps)1023;
+				var traceops = TraceOps.ReqTiles;
 
 				rayA = new RayEmitter((f) => { }, new EmitterCfg()
 				{
 					//Log = new LogCfg("rayA", true, traceops),
-					TileSize = 60000
+					TileSizeBytes = 60000
 				});
 				rayB = new RayEmitter(receive, new EmitterCfg()
 				{
-					//Log = new LogCfg("rayB", true, traceops),
-					TileSize = 60000
+					Log = new LogCfg("rayB", true, traceops),
+					TileSizeBytes = 60000
 				});
 
 				using (var hw = new HeapHighway())
