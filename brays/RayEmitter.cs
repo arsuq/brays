@@ -75,8 +75,6 @@ namespace brays
 			socket.ReceiveBufferSize = cfg.ReceiveBufferSize;
 			socket.SendBufferSize = cfg.SendBufferSize;
 
-			// 2d0: set socket options
-
 			Interlocked.Exchange(ref stop, 0);
 			receivers = new Task[cfg.MaxConcurrentReceives];
 
@@ -263,6 +261,7 @@ namespace brays
 		bool configx()
 		{
 			if (Volatile.Read(ref stop) > 0) return false;
+			Volatile.Write(ref lastCfgxSendTick, DateTime.Now.Ticks);
 
 			var rst = new ManualResetEventSlim(false);
 			var cfgx = new CfgX(cfg);
@@ -353,9 +352,11 @@ namespace brays
 			var oldc = Interlocked.CompareExchange(ref targetCfg, tcfg, null);
 			signal(f.FrameID, (int)SignalKind.ACK, false);
 			trace(TraceOps.ProcCfgX, f.FrameID,
-				$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxReceivers: {tcfg.MaxConcurrentReceives}");
+				$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
+				$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
 
-			if (oldc == null) configx();
+			if (DateTime.Now.Ticks - Volatile.Read(ref lastCfgxSendTick) > cfg.SendCfxOnceEveryXTicks)
+				configx();
 		}
 
 
@@ -718,6 +719,7 @@ namespace brays
 
 		int ccBeams;
 		long lastBeamBurstTick;
+		long lastCfgxSendTick;
 
 		int frameCounter;
 		int blockCounter;

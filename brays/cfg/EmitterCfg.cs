@@ -11,6 +11,11 @@ namespace brays
 		}
 
 		/// <summary>
+		/// The ticks count equivalent to 8 sec;
+		/// </summary>
+		public long SendCfxOnceEveryXTicks = new TimeSpan(0, 0, 8).Ticks;
+
+		/// <summary>
 		/// The default value is ushort.MaxValue * 200
 		/// </summary>
 		public int ReceiveBufferSize = ushort.MaxValue * 200;
