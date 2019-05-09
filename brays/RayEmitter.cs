@@ -109,10 +109,10 @@ namespace brays
 		public int TileX(Span<byte> data) => tilex((byte)Lead.TileX, data);
 
 		public async Task<int> TileX(MemoryFragment f)
-			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span()));
+			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span())).ConfigureAwait(false);
 
 		public async Task<int> TileX(MemoryFragment f, int start, int len)
-			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span().Slice(start, len)));
+			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span().Slice(start, len))).ConfigureAwait(false);
 
 		public async Task<bool> Beam(MemoryFragment f)
 		{
@@ -126,10 +126,10 @@ namespace brays
 					{
 						for (int i = 0; i < cfg.TotalReBeamsCount; i++)
 							if (beam(b)) return true;
-							else await Task.Delay(cfg.BeamAwaitMS);
+							else await Task.Delay(cfg.BeamAwaitMS).ConfigureAwait(false);
 
 						return false;
-					});
+					}).ConfigureAwait(false);
 				}
 				catch (AggregateException aex)
 				{
@@ -563,7 +563,7 @@ namespace brays
 					try
 					{
 						socket.Send(probeLead);
-						await Task.Delay(cfg.ProbeFreqMS);
+						await Task.Delay(cfg.ProbeFreqMS).ConfigureAwait(false);
 					}
 					catch { }
 		}
@@ -575,7 +575,7 @@ namespace brays
 					try
 					{
 						var frag = inHighway.Alloc(UDP_MAX);
-						var read = await socket.ReceiveAsync(frag, SocketFlags.None);
+						var read = await socket.ReceiveAsync(frag, SocketFlags.None).ConfigureAwait(false);
 
 						if (read > 0)
 						{
@@ -592,7 +592,7 @@ namespace brays
 							frag.Dispose();
 
 							if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
-							else await Task.Delay(cfg.ErrorAwaitMS);
+							else await Task.Delay(cfg.ErrorAwaitMS).ConfigureAwait(false);
 						}
 					}
 					catch (Exception ex)
@@ -631,7 +631,7 @@ namespace brays
 							sentSignalsFor.TryRemove(ss.Key, out SignalResponse x);
 				}
 				catch { }
-				await Task.Delay(cfg.CleanupFreqMS);
+				await Task.Delay(cfg.CleanupFreqMS).ConfigureAwait(false);
 			}
 		}
 
@@ -643,7 +643,7 @@ namespace brays
 
 				while (Volatile.Read(ref stop) < 1 && !b.IsComplete && !b.isFaulted && !b.isRejected)
 				{
-					await Task.Delay(cfg.WaitAfterAllSentMS);
+					await Task.Delay(cfg.WaitAfterAllSentMS).ConfigureAwait(false);
 
 					if (b.timeToReqTiles(cfg.WaitAfterAllSentMS) && b.RemainingTiles > 0)
 					{

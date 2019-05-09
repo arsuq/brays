@@ -358,16 +358,17 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new EmitterCfg()
 					{
-						Log = new LogCfg("rayA", true, (TraceOps)1023) { OnTrace = null },
+						Log = new LogCfg("rayA", true, (TraceOps)2047) { OnTrace = null },
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 20
 #endif
 					});
 
+
 				rayB = new RayEmitter(receive, new EmitterCfg()
 				{
-					Log = new LogCfg("rayB", true, (TraceOps)1023) { OnTrace = null },
+					Log = new LogCfg("rayB", true, (TraceOps)2047) { OnTrace = null },
 #if DEBUG
 					dropFrames = true,
 					deopFramePercent = 20
