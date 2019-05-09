@@ -87,7 +87,7 @@ namespace brays
 
 			if (configexchange)
 			{
-				if (!configx()) return false;
+				if (!ConfigExchange()) return false;
 
 				// 2d0: settings update
 			}
@@ -96,7 +96,23 @@ namespace brays
 			return true;
 		}
 
-		public bool ConfigExchange() => configx();
+		public bool ConfigExchange()
+		{
+			var cfgx = new CfgX(cfg);
+			Span<byte> s = stackalloc byte[CfgX.LENGTH];
+			cfgx.Write(s);
+
+			var mark = tilex((byte)Lead.CfgX, s);
+			return mark == (int)SignalKind.ACK;
+		}
+
+		public int TileX(Span<byte> data) => tilex((byte)Lead.TileX, data);
+
+		public async Task<int> TileX(MemoryFragment f)
+			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span()));
+
+		public async Task<int> TileX(MemoryFragment f, int start, int len)
+			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span().Slice(start, len)));
 
 		public async Task<bool> Beam(MemoryFragment f)
 		{
@@ -258,38 +274,40 @@ namespace brays
 			return sent;
 		}
 
-		bool configx()
+		int tilex(byte kind, Span<byte> data)
 		{
-			if (Volatile.Read(ref stop) > 0) return false;
+			if (data.Length > cfg.TileSizeBytes) throw new ArgumentException("data size");
+
+			if (Volatile.Read(ref stop) > 0) return (int)SignalKind.NOTSET;
 			Volatile.Write(ref lastCfgxSendTick, DateTime.Now.Ticks);
 
 			var rst = new ManualResetEventSlim(false);
-			var cfgx = new CfgX(cfg);
 			var fid = Interlocked.Increment(ref frameCounter);
-			var len = CfgX.LENGTH + CFGX.HEADER;
-			var rsp = false;
-			Span<byte> s = stackalloc byte[len];
-			cfgx.Write(s.Slice(CFGX.HEADER));
-			var dgram = new CFGX(fid, 0, s.Slice(CFGX.HEADER));
-			dgram.Write(s);
+			var len = data.Length + TILEX.HEADER;
+			var rsp = 0;
+			Span<byte> dgram = stackalloc byte[len];
+			var tilex = new TILEX(kind, fid, 0, data);
+			tilex.Write(dgram);
 
 			var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 			{
-				if ((SignalKind)mark == SignalKind.ACK)
-					Volatile.Write(ref rsp, true);
-
+				Volatile.Write(ref rsp, mark);
 				rst.Set();
 			}));
 
 			if (ackq)
 			{
+				var awaitMS = cfg.RetryDelayMS;
+
 				for (int i = 0; i < cfg.SendRetries; i++)
 				{
-					var sent = socket.Send(s, SocketFlags.None);
+					var sent = socket.Send(dgram, SocketFlags.None);
 
-					if (sent == 0) trace(TraceOps.CfgX, fid, "Socket sent 0 bytes");
-					else trace(TraceOps.CfgX, fid, $"#{i + 1}");
-					if (rst.Wait(cfg.RetryDelayMS)) break;
+					if (sent == 0) trace(TraceOps.TileX, fid, $"K: {kind} Socket sent 0 bytes");
+					else trace(TraceOps.TileX, fid, $"K: {kind} #{i + 1}");
+					if (rst.Wait(awaitMS)) break;
+
+					awaitMS = (int)(awaitMS * 1.6);
 				}
 			}
 
@@ -310,7 +328,7 @@ namespace brays
 					case Lead.Error: procError(f); break;
 					case Lead.Block: procBlock(f); break;
 					case Lead.Status: procStatus(f); break;
-					case Lead.CfgX: procCfgX(f); break;
+					case Lead.CfgX: procTileX(f); break;
 					default:
 					break;
 				}
@@ -336,27 +354,27 @@ namespace brays
 			signal(0, (byte)SignalKind.ACK, false, false);
 		}
 
-		void procCfgX(MemoryFragment frag)
+		void procTileX(MemoryFragment frag)
 		{
-			var f = new CFGX(frag.Span());
+			var f = new TILEX(frag.Span());
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				trace(TraceOps.DropFrame, f.FrameID, "CfgX");
+				trace(TraceOps.DropFrame, f.FrameID, "TileX");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.CfgX, f.FrameID, false)) return;
+			if (isClone(TraceOps.TileX, f.FrameID, false)) return;
 
 			var tcfg = new CfgX(f.Data);
 			var oldc = Interlocked.CompareExchange(ref targetCfg, tcfg, null);
 			signal(f.FrameID, (int)SignalKind.ACK, false);
-			trace(TraceOps.ProcCfgX, f.FrameID,
+			trace(TraceOps.ProcTileX, f.FrameID, $"K: {f.Kind} " +
 				$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
 				$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
 
 			if (DateTime.Now.Ticks - Volatile.Read(ref lastCfgxSendTick) > cfg.SendCfxOnceEveryXTicks)
-				configx();
+				ConfigExchange();
 		}
 
 
@@ -658,7 +676,7 @@ namespace brays
 					case TraceOps.Beam:
 					case TraceOps.Status:
 					case TraceOps.Signal:
-					case TraceOps.CfgX:
+					case TraceOps.TileX:
 					ttl = string.Format("{0,10}:o {1, -12} {2}", frame, op, title);
 					break;
 					case TraceOps.ReqTiles:
@@ -668,7 +686,7 @@ namespace brays
 					case TraceOps.ProcError:
 					case TraceOps.ProcStatus:
 					case TraceOps.ProcSignal:
-					case TraceOps.ProcCfgX:
+					case TraceOps.ProcTileX:
 					ttl = string.Format("{0,10}:i {1, -12} {2}", frame, op, title);
 					break;
 #if DEBUG

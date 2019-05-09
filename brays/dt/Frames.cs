@@ -142,17 +142,17 @@ namespace brays
 		public int LENGTH => HEADER + (TileMap != null ? TileMap.Length : 0);
 	}
 
-	readonly ref struct CFGX
+	readonly ref struct TILEX
 	{
-		public CFGX(int fid, ushort l, Span<byte> s)
+		public TILEX(byte kind, int fid, ushort l, Span<byte> s)
 		{
-			Kind = (byte)Lead.CfgX;
+			Kind = kind;
 			FrameID = fid;
 			Length = s.Length > 0 ? (ushort)s.Length : l;
 			Data = s;
 		}
 
-		public CFGX(Span<byte> s)
+		public TILEX(Span<byte> s)
 		{
 			Kind = s[0];
 			FrameID = BitConverter.ToInt32(s.Slice(1));
