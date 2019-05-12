@@ -17,8 +17,8 @@ namespace brays
 	enum SignalKind : int
 	{
 		NOTSET = 0,
-		NACK = 1,
-		ACK = 2,
+		ACK = 1,
+		NACK = 2,
 		UNK = 3,
 		ERR = 4
 	}

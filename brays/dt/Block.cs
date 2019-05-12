@@ -136,8 +136,10 @@ namespace brays
 		internal bool isFaulted;
 		internal bool isRejected;
 		internal int isOnCompleteTriggered;
+		internal int isRebeamRequestPending;
 
 		internal Task requestTiles;
+		internal Task<bool> beamTiles;
 
 		int markedTiles;
 		object sync = new object();

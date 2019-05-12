@@ -122,18 +122,16 @@ namespace brays
 			if (blockMap.TryAdd(bid, b))
 				try
 				{
-					return await Task.Run(async () =>
-					{
-						for (int i = 0; i < cfg.TotalReBeamsCount; i++)
-							if (beam(b)) return true;
-							else await Task.Delay(cfg.BeamAwaitMS).ConfigureAwait(false);
-
-						return false;
-					}).ConfigureAwait(false);
+					b.beamTiles = beamLoop(b);
+					return await b.beamTiles;
 				}
 				catch (AggregateException aex)
 				{
 					trace("Ex", "Beam", aex.Flatten().ToString());
+				}
+				catch (Exception ex)
+				{
+					trace("Ex", "Beam", ex.ToString());
 				}
 
 			return false;
@@ -211,6 +209,43 @@ namespace brays
 			return status(b.ID, sent, true, null);
 		}
 
+		async Task<bool> beamLoop(Block b)
+		{
+			try
+			{
+				for (int i = 0; i < cfg.TotalReBeamsCount; i++)
+					if (beam(b))
+					{
+						if (Interlocked.CompareExchange(ref b.isRebeamRequestPending, 0, 1) == 1)
+							Volatile.Write(ref b.beamTiles, beamLoop(b));
+						else Volatile.Write(ref b.beamTiles, null);
+						return true;
+					}
+					else await Task.Delay(cfg.BeamAwaitMS).ConfigureAwait(false);
+			}
+			catch (AggregateException aex)
+			{
+				var faex = aex.Flatten();
+				trace("Ex", faex.Message, faex.StackTrace);
+			}
+			catch (Exception ex)
+			{
+				trace("Ex", ex.Message, ex.StackTrace);
+			}
+
+			return false;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		void rebeam(Block b)
+		{
+			var req = Interlocked.CompareExchange(ref b.isRebeamRequestPending, 1, 0);
+			var bst = Volatile.Read(ref b.beamTiles);
+
+			if (req == 0 && (bst == null || bst.Status == TaskStatus.RanToCompletion))
+				Volatile.Write(ref b.beamTiles, beamLoop(b));
+		}
+
 		bool status(int blockID, int tilesCount, bool awaitRsp, Span<byte> tileMap)
 		{
 			if (Volatile.Read(ref stop) > 0) return false;
@@ -228,8 +263,6 @@ namespace brays
 				{
 					if ((SignalKind)mark == SignalKind.ACK) Volatile.Write(ref rsp, true);
 					else trace(TraceOps.Status, fid, $"NACK B: {blockID}");
-
-					//signalAwaits.TryRemove(fid, out SignalAwait x);
 					rst.Set();
 				}));
 
@@ -351,7 +384,7 @@ namespace brays
 		void procProbe()
 		{
 			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
-			signal(0, (byte)SignalKind.ACK, false, false);
+			if (!cfg.EnableProbes) socket.Send(probeLead);
 		}
 
 		void procTileX(MemoryFragment frag)
@@ -376,7 +409,6 @@ namespace brays
 			if (DateTime.Now.Ticks - Volatile.Read(ref lastCfgxSendTick) > cfg.SendCfxOnceEveryXTicks)
 				ConfigExchange();
 		}
-
 
 		void procBlock(MemoryFragment frag)
 		{
@@ -498,7 +530,7 @@ namespace brays
 							trace(TraceOps.ProcStatus, st.FrameID,
 								$"Re-beam B: {st.BlockID} M: {b.tileMap.ToString()}");
 
-							beam(b);
+							rebeam(b);
 						}
 					}
 				}
