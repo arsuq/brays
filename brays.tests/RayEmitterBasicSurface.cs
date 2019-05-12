@@ -21,28 +21,28 @@ namespace brays.tests
 			//  await oneMeg();
 #if DEBUG
 			//await missingTiles();
-			//await M30();
+			await M30();
 #endif
 
-			for (int i = 0; i < 4; i++)
-				await halfGigNoLogNoVerify();
+			//for (int i = 0; i < 4; i++)
+			//	await halfGigNoLogNoVerify();
 		}
 
 		async Task oneByteDgram()
 		{
 			"[In] oneByteDgram()".AsTestInfo();
 
-			RayEmitter rayA = null;
-			RayEmitter rayB = null;
+			RayBeamer rayA = null;
+			RayBeamer rayB = null;
 
 			try
 			{
 				var rst = new ManualResetEvent(false);
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
-				rayA = new RayEmitter((f) => { Console.WriteLine("?"); },
+				rayA = new RayBeamer((f) => { Console.WriteLine("?"); },
 					new EmitterCfg() { Log = new LogCfg("rayA", true) });
-				rayB = new RayEmitter((f) =>
+				rayB = new RayBeamer((f) =>
 				{
 					if (f.Span()[0] == 1)
 					{
@@ -102,8 +102,8 @@ namespace brays.tests
 		{
 			"[In] oneMeg()".AsTestInfo();
 
-			RayEmitter rayA = null;
-			RayEmitter rayB = null;
+			RayBeamer rayA = null;
+			RayBeamer rayB = null;
 
 			const int MEG = 1_000_000;
 
@@ -112,10 +112,10 @@ namespace brays.tests
 				var rst = new ManualResetEvent(false);
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
-				rayA = new RayEmitter(
+				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
 					new EmitterCfg() { Log = new LogCfg("rayA", true) });
-				rayB = new RayEmitter((f) =>
+				rayB = new RayBeamer((f) =>
 				{
 					try
 					{
@@ -191,8 +191,8 @@ namespace brays.tests
 		{
 			"[In] missingTiles()".AsTestInfo();
 
-			RayEmitter rayA = null;
-			RayEmitter rayB = null;
+			RayBeamer rayA = null;
+			RayBeamer rayB = null;
 
 			const int MEG = 1_000_000;
 
@@ -201,7 +201,7 @@ namespace brays.tests
 				var rst = new ManualResetEvent(false);
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
-				rayA = new RayEmitter(
+				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
 					new EmitterCfg()
 					{
@@ -211,7 +211,7 @@ namespace brays.tests
 						deopFramePercent = 30
 #endif
 					});
-				rayB = new RayEmitter((f) =>
+				rayB = new RayBeamer((f) =>
 				{
 					try
 					{
@@ -294,8 +294,8 @@ namespace brays.tests
 		{
 			"[In] M30()".AsTestInfo();
 
-			RayEmitter rayA = null;
-			RayEmitter rayB = null;
+			RayBeamer rayA = null;
+			RayBeamer rayB = null;
 
 			const int CAP = 30_000_000;
 			int totalSend = 0;
@@ -354,7 +354,7 @@ namespace brays.tests
 					}
 				}
 
-				rayA = new RayEmitter(
+				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
 					new EmitterCfg()
 					{
@@ -366,7 +366,7 @@ namespace brays.tests
 					});
 
 
-				rayB = new RayEmitter(receive, new EmitterCfg()
+				rayB = new RayBeamer(receive, new EmitterCfg()
 				{
 					Log = new LogCfg("rayB", true, (TraceOps)2047) { OnTrace = null },
 #if DEBUG
@@ -439,8 +439,8 @@ namespace brays.tests
 			"[In] halfGigNoLogNoVerify()".AsTestInfo();
 			var started = DateTime.Now;
 
-			RayEmitter rayA = null;
-			RayEmitter rayB = null;
+			RayBeamer rayA = null;
+			RayBeamer rayB = null;
 
 			const int CAP = 500_000_000;
 			int totalSend = 0;
@@ -498,12 +498,12 @@ namespace brays.tests
 
 				var traceops = (TraceOps.ReqTiles | TraceOps.TileX | TraceOps.ProcTileX);
 
-				rayA = new RayEmitter((f) => { }, new EmitterCfg()
+				rayA = new RayBeamer((f) => { }, new EmitterCfg()
 				{
 					//Log = new LogCfg("rayA", true, traceops),
 					TileSizeBytes = 60000
 				});
-				rayB = new RayEmitter(receive, new EmitterCfg()
+				rayB = new RayBeamer(receive, new EmitterCfg()
 				{
 					Log = new LogCfg("rayB", true, traceops),
 					TileSizeBytes = 60000

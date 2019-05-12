@@ -12,9 +12,9 @@ using System.Linq;
 
 namespace brays
 {
-	public class RayEmitter : IDisposable
+	public class RayBeamer : IDisposable
 	{
-		public RayEmitter(Action<MemoryFragment> onReceived, EmitterCfg cfg)
+		public RayBeamer(Action<MemoryFragment> onReceived, EmitterCfg cfg)
 		{
 			if (onReceived == null || cfg == null) throw new ArgumentNullException();
 
@@ -149,6 +149,10 @@ namespace brays
 
 		bool beam(Block b)
 		{
+#if DEBUG
+			if (Interlocked.Increment(ref ccBeamsFuse) > 1)
+				throw new InvariantException($"ccBeamsFuse: {ccBeamsFuse}");
+#endif
 			int sent = 0;
 
 			for (int i = 0; i < b.tileMap.Count; i++)
@@ -203,6 +207,9 @@ namespace brays
 					finally
 					{
 						Interlocked.Decrement(ref ccBeams);
+#if DEBUG
+						Interlocked.Decrement(ref ccBeamsFuse);
+#endif
 					}
 
 			b.sentTime = DateTime.Now;
@@ -764,7 +771,7 @@ namespace brays
 		Log log;
 
 #if DEBUG
-		int ccProcsCount;
+		int ccBeamsFuse;
 #endif
 
 		int ccBeams;
