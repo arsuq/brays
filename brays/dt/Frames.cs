@@ -32,7 +32,7 @@ namespace brays
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void Write(Span<byte> s)
+		public void Write(Span<byte> s, bool headerOnly = false)
 		{
 			s[0] = Kind;
 			BitConverter.TryWriteBytes(s.Slice(1), FrameID);
@@ -41,7 +41,7 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(13), TileIndex);
 			BitConverter.TryWriteBytes(s.Slice(17), Length);
 			s[19] = Options;
-			Data.CopyTo(s.Slice(HEADER));
+			if (!headerOnly) Data.CopyTo(s.Slice(HEADER));
 		}
 
 		public readonly byte Kind;

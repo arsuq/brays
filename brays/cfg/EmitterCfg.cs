@@ -70,12 +70,17 @@ namespace brays
 		/// <summary>
 		/// The number of unconfirmed status dgram sends before bailing the corresponding operation. 
 		/// </summary>
-		public int SendRetries = 8;
+		public int SendRetries = 40;
 
 		/// <summary>
 		/// The SendRetries loop await. 
 		/// </summary>
-		public int RetryDelayMS = 800;
+		public int RetryDelayStartMS = 20;
+
+		/// <summary>
+		/// After each retry the RetryDelayStartMS is multiplied by this value.
+		/// </summary>
+		public double RetryDelayStepMultiplier = 1.8;
 
 		/// <summary>
 		/// The cleanup triggering frequency.
@@ -105,7 +110,7 @@ namespace brays
 
 		/// <summary>
 		/// All sent blocks are deleted this amount of time after being sent.
-		/// Re-beams offset the sent time.
+		/// Re-beams offsets the sent time.
 		/// </summary>
 		public TimeSpan SentBlockRetention = new TimeSpan(0, 5, 0);
 
@@ -122,7 +127,7 @@ namespace brays
 		/// In practice the last few tiles of a block will arrive after the all-sent status signal,
 		/// so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
 		/// </remarks>
-		public int WaitAfterAllSentMS = 1400;
+		public int WaitAfterAllSentMS = 800;
 
 		/// <summary>
 		/// Where the blocks are assembled.

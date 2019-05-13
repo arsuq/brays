@@ -141,6 +141,8 @@ namespace brays
 		internal Task requestTiles;
 		internal Task<bool> beamTiles;
 
+		internal byte[] frameHeader = new byte[FRAME.HEADER];
+
 		int markedTiles;
 		object sync = new object();
 		MemoryFragment fragment;

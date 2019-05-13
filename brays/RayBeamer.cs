@@ -6,8 +6,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-using System.Linq;
-
 [assembly: InternalsVisibleTo("brays.tests")]
 
 namespace brays
@@ -108,9 +106,11 @@ namespace brays
 
 		public int TileX(Span<byte> data) => tilex((byte)Lead.TileX, data);
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public async Task<int> TileX(MemoryFragment f)
 			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span())).ConfigureAwait(false);
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public async Task<int> TileX(MemoryFragment f, int start, int len)
 			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span().Slice(start, len))).ConfigureAwait(false);
 
@@ -149,6 +149,10 @@ namespace brays
 
 		bool beam(Block b)
 		{
+			// [!!] This method should be invoked once at a time per block because
+			// the MemoryFragment bits are mutated. Consequently the block should
+			// never be shared outside brays as it's not safe to read while sending.
+
 #if DEBUG
 			if (Interlocked.Increment(ref ccBeamsFuse) > 1)
 				throw new InvariantException($"ccBeamsFuse: {ccBeamsFuse}");
@@ -157,6 +161,9 @@ namespace brays
 
 			for (int i = 0; i < b.tileMap.Count; i++)
 				if (!b.tileMap[i])
+				{
+					Span<byte> data = default;
+
 					try
 					{
 						if (Volatile.Read(ref b.isRejected) || Volatile.Read(ref stop) > 0)
@@ -174,30 +181,58 @@ namespace brays
 						}
 
 						Interlocked.Increment(ref ccBeams);
-
-						var data = b.Fragment.Span().Slice(i * b.TileSize);
-						if (data.Length > b.TileSize) data = data.Slice(0, b.TileSize);
-
 						var fid = Interlocked.Increment(ref frameCounter);
-						var f = new FRAME(fid, b.ID, b.TotalSize, i, b.TileSize, 0, data);
+						var sentBytes = 0;
+						var dgramLen = 0;
 
-						using (var mf = outHighway.Alloc(f.LENGTH))
+						// [!] In order to avoid copying the tile data into a FRAME span 
+						// just to prepend the FRAME header, the block MemoryFragment 
+						// is modified in place. This doesn't work for the first tile. 
+
+						if (i > 0)
 						{
-							var dgram = mf.Span();
-							f.Write(dgram);
-							var sbytes = socket.Send(dgram);
+							data = b.Fragment.Span().Slice((i * b.TileSize) - FRAME.HEADER);
+							data.Slice(0, FRAME.HEADER).CopyTo(b.frameHeader);
 
-							if (sbytes == dgram.Length)
+							if (data.Length > b.TileSize + FRAME.HEADER)
+								data = data.Slice(0, b.TileSize + FRAME.HEADER);
+							dgramLen = data.Length;
+
+							var f = new FRAME(fid, b.ID, b.TotalSize, i, (ushort)(dgramLen - FRAME.HEADER), 0, default);
+
+							// After this call the block fragment will be corrupted
+							// until the finally clause.
+							f.Write(data.Slice(0, FRAME.HEADER), true);
+							sentBytes = socket.Send(data);
+						}
+						else
+						{
+							data = b.Fragment.Span().Slice(i * b.TileSize);
+							if (data.Length > b.TileSize) data = data.Slice(0, b.TileSize);
+							dgramLen = data.Length;
+
+							var f = new FRAME(fid, b.ID, b.TotalSize, i, 0, 0, data);
+
+							using (var mf = outHighway.Alloc(f.LENGTH))
 							{
-								trace(TraceOps.Beam, fid, $"{sbytes} B: {b.ID} T: {i}");
-								sent++;
+								var dgram = mf.Span();
+								f.Write(dgram);
+								dgramLen = dgram.Length;
+								sentBytes = socket.Send(dgram);
 							}
-							else
-							{
-								trace(TraceOps.Beam, fid, $"Faulted for sending {sbytes} of {dgram.Length} byte dgram.");
-								b.isFaulted = true;
-								return false;
-							}
+						}
+
+						if (sentBytes == dgramLen)
+						{
+							trace(TraceOps.Beam, fid, $"{sentBytes} B: {b.ID} T: {i}");
+							sent++;
+						}
+						else
+						{
+							trace(TraceOps.Beam, fid,
+								$"Faulted for sending {sentBytes} of {dgramLen} byte dgram.");
+							b.isFaulted = true;
+							return false;
 						}
 					}
 					catch (Exception ex)
@@ -206,11 +241,14 @@ namespace brays
 					}
 					finally
 					{
+						// [!] Restore the original bytes no matter what happens.
+						if (i > 0) b.frameHeader.AsSpan().CopyTo(data);
 						Interlocked.Decrement(ref ccBeams);
 #if DEBUG
 						Interlocked.Decrement(ref ccBeamsFuse);
 #endif
 					}
+				}
 
 			b.sentTime = DateTime.Now;
 			return status(b.ID, sent, true, null);
@@ -257,10 +295,12 @@ namespace brays
 		{
 			if (Volatile.Read(ref stop) > 0) return false;
 
-			var rst = new ManualResetEventSlim(false);
 			var fid = Interlocked.Increment(ref frameCounter);
 			var len = tileMap.Length + STATUS.HEADER;
 			var rsp = false;
+
+			ManualResetEventSlim rst = null;
+			if (awaitRsp) rst = new ManualResetEventSlim(false);
 
 			using (var frag = outHighway.Alloc(len))
 			{
@@ -276,6 +316,7 @@ namespace brays
 				if (ackq)
 				{
 					var map = string.Empty;
+					var awaitMS = cfg.RetryDelayStartMS;
 
 					if (blockMap.TryGetValue(blockID, out Block b) && tileMap.Length > 0)
 						map = $"M: {b.tileMap.ToString()} ";
@@ -287,7 +328,8 @@ namespace brays
 						if (sent == 0) trace(TraceOps.Status, fid, $"Socket sent 0 bytes. B: {blockID} #{i + 1}");
 						else trace(TraceOps.Status, fid, $"B: {blockID} {map} #{i + 1}");
 
-						if (!awaitRsp || rst.Wait(cfg.RetryDelayMS)) break;
+						if (!awaitRsp || rst.Wait(awaitMS)) break;
+						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
 					}
 				}
 
@@ -337,7 +379,7 @@ namespace brays
 
 			if (ackq)
 			{
-				var awaitMS = cfg.RetryDelayMS;
+				var awaitMS = cfg.RetryDelayStartMS;
 
 				for (int i = 0; i < cfg.SendRetries; i++)
 				{
@@ -347,7 +389,7 @@ namespace brays
 					else trace(TraceOps.TileX, fid, $"K: {kind} #{i + 1}");
 					if (rst.Wait(awaitMS)) break;
 
-					awaitMS = (int)(awaitMS * 1.6);
+					awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
 				}
 			}
 
@@ -431,7 +473,7 @@ namespace brays
 			if (!blockMap.ContainsKey(f.BlockID))
 			{
 				// Reject logic + Error or:
-				if (blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, f.Length, blockHighway)))
+				if (blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, cfg.TileSizeBytes, blockHighway)))
 					signal(f.FrameID, (int)SignalKind.ACK);
 			}
 
@@ -440,7 +482,6 @@ namespace brays
 			if (!b.Receive(f))
 			{
 				trace(TraceOps.ProcBlock, f.FrameID, $"Tile ignore B: {b.ID} T: {f.TileIndex}");
-
 				return;
 			}
 
@@ -655,7 +696,10 @@ namespace brays
 
 					foreach (var b in blockMap.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
+						{
 							blockMap.TryRemove(b.ID, out Block x);
+							b.Dispose();
+						}
 
 					foreach (var sa in signalAwaits)
 						if (sa.Value.OnSignal != null && DateTime.Now.Subtract(sa.Value.Created) > cfg.SignalAwait)
@@ -757,8 +801,6 @@ namespace brays
 					catch { }
 			}
 		}
-
-		internal Block[] notComplete() => blockMap.Values.Where(x => !x.IsComplete).ToArray();
 
 		Action<MemoryFragment> onReceived;
 
