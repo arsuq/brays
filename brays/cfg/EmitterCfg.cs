@@ -11,9 +11,9 @@ namespace brays
 		}
 
 		/// <summary>
-		/// The ticks count equivalent to 8 sec;
+		/// The await for the remote config when exchanging.
 		/// </summary>
-		public long SendCfxOnceEveryXTicks = new TimeSpan(0, 0, 8).Ticks;
+		public TimeSpan ConfigExchangeTimeout = new TimeSpan(0, 0, 30);
 
 		/// <summary>
 		/// The default value is ushort.MaxValue * 200
@@ -33,7 +33,7 @@ namespace brays
 		/// <summary>
 		/// The concurrent socket listeners.
 		/// </summary>
-		public int MaxConcurrentReceives = Environment.ProcessorCount * 2;
+		public int MaxConcurrentReceives = 4;
 
 		/// <summary>
 		/// The log configuration.
@@ -117,7 +117,7 @@ namespace brays
 		/// <summary>
 		/// The amount of time before deleting the awaiting frame reply callbacks.
 		/// </summary>
-		public TimeSpan SignalAwait = new TimeSpan(0, 5, 0);
+		public TimeSpan AwaitsCleanupAfter = new TimeSpan(0, 2, 0);
 
 		/// <summary>
 		/// If all tiles are sent but not received yet, the receiver will wait this amount

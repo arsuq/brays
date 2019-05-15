@@ -144,10 +144,11 @@ namespace brays
 
 	readonly ref struct TILEX
 	{
-		public TILEX(byte kind, int fid, ushort l, Span<byte> s)
+		public TILEX(byte kind, int fid, int refid, ushort l, Span<byte> s)
 		{
 			Kind = kind;
 			FrameID = fid;
+			RefID = refid;
 			Length = s.Length > 0 ? (ushort)s.Length : l;
 			Data = s;
 		}
@@ -156,7 +157,8 @@ namespace brays
 		{
 			Kind = s[0];
 			FrameID = BitConverter.ToInt32(s.Slice(1));
-			Length = BitConverter.ToUInt16(s.Slice(5));
+			RefID = BitConverter.ToInt32(s.Slice(5));
+			Length = BitConverter.ToUInt16(s.Slice(9));
 			Data = s.Slice(HEADER);
 		}
 
@@ -171,10 +173,11 @@ namespace brays
 
 		public readonly byte Kind;
 		public readonly int FrameID;
+		public readonly int RefID;
 		public readonly ushort Length;
 		public readonly Span<byte> Data;
 
-		public const int HEADER = 7;
+		public const int HEADER = 11;
 		public int LENGTH => HEADER + Data.Length;
 	}
 }

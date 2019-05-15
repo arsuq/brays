@@ -42,6 +42,7 @@ namespace brays
 		}
 
 		public int LastEnteredThread => threadID;
+		public bool IsAcquired => Volatile.Read(ref acq) > 0;
 
 		bool threadAffinity;
 		int threadID = -1;
