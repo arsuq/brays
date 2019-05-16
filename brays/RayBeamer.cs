@@ -12,7 +12,7 @@ namespace brays
 {
 	public class RayBeamer : IDisposable
 	{
-		public RayBeamer(Action<MemoryFragment> onReceived, EmitterCfg cfg)
+		public RayBeamer(Action<MemoryFragment> onReceived, BeamerCfg cfg)
 		{
 			if (onReceived == null || cfg == null) throw new ArgumentNullException();
 
@@ -21,6 +21,7 @@ namespace brays
 			this.cfg = cfg;
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
+			tileXHigheay = cfg.TileExchangeHighway;
 
 			if (cfg.Log != null)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB);
@@ -53,7 +54,7 @@ namespace brays
 				try
 				{
 					Volatile.Write(ref isLocked, false);
-					lockOnMRE.Reset();
+					lockOnRst.Reset();
 
 					this.source = listen;
 					this.target = target;
@@ -66,6 +67,8 @@ namespace brays
 					socket.ReceiveBufferSize = cfg.ReceiveBufferSize;
 					socket.SendBufferSize = cfg.SendBufferSize;
 
+					lockOnRst.Set();
+
 					if (receivers == null)
 					{
 						receivers = new Task[cfg.MaxConcurrentReceives];
@@ -76,8 +79,6 @@ namespace brays
 
 					if (probingTask == null) probingTask = probe();
 					if (cleanupTask == null) cleanupTask = cleanup();
-
-					Volatile.Write(ref isLocked, true);
 
 					if (configExchange)
 					{
@@ -90,16 +91,19 @@ namespace brays
 						// 2d0: settings update
 					}
 
+					Volatile.Write(ref isLocked, true);
+
 					trace("Lock-on", $"{source.ToString()} target: {target.ToString()}");
 					return true;
 				}
 				catch (Exception ex)
 				{
+					if (!lockOnRst.IsSet) lockOnRst.Set();
 					log.Write($"Ex LockOn {ex.Message}", ex.ToString());
 				}
 				finally
 				{
-					lockOnMRE.Set();
+
 					lockOnGate.Exit();
 				}
 
@@ -108,47 +112,40 @@ namespace brays
 
 		public bool ConfigExchange(int refID = 0, bool awaitRemote = false)
 		{
-			var cfgx = new CfgX(cfg);
-			Span<byte> s = stackalloc byte[CfgX.LENGTH];
+			Span<byte> s = refID > 0 ? stackalloc byte[CfgX.LENGTH] : default;
 
-			cfgx.Write(s);
+			// If the refID is 0 the cfg is treated as a request.
+			if (refID > 0)
+			{
+				var cfgx = new CfgX(cfg);
+				cfgx.Write(s);
+			}
+
 			var fid = Interlocked.Increment(ref frameCounter);
-
 			ManualResetEventSlim rst = null;
 
 			if (awaitRemote)
 			{
 				rst = new ManualResetEventSlim(false);
 
-				tileXAwaits.TryAdd(fid, new TileXAwait((frag) =>
+				void cfgReceived(MemoryFragment frag)
 				{
-					var f = new TILEX(frag.Span());
+					rst.Set();
+					if (frag != null) frag.Dispose();
+				}
 
-					if ((Lead)f.Kind == Lead.CfgX)
-					{
-						var tcfg = new CfgX(f.Data);
-						Volatile.Write(ref targetCfg, new CfgX(f.Data));
-
-						trace(TraceOps.ProcTileX, f.FrameID, $"K: CfgX" +
-							$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
-							$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
-
-						rst.Set();
-					}
-					else trace(TraceOps.TileX, f.FrameID, $"ConfigExchange unknown response kind: {f.Kind}");
-				}));
-
-				if (tilex((byte)Lead.CfgX, s, refID, fid) != (int)SignalKind.ACK) return false;
+				if (tilex((byte)Lead.CfgX, s, refID, fid, cfgReceived) != (int)SignalKind.ACK) return false;
 
 				return rst.Wait(cfg.ConfigExchangeTimeout);
 			}
 			else return tilex((byte)Lead.CfgX, s, refID, fid) == (int)SignalKind.ACK;
 		}
 
-		public int TileX(Span<byte> data, int refID = 0) => tilex((byte)Lead.TileX, data, refID);
+		public int TileX(Span<byte> data, int refID = 0, Action<MemoryFragment> onReply = null)
+			=> tilex((byte)Lead.TileX, data, refID, 0, onReply);
 
-		public void TileXFF(Span<byte> data, int refID = 0) => tilexOnce((byte)Lead.TileX, data, refID);
-
+		public void TileXFF(Span<byte> data, int refID = 0, Action<MemoryFragment> onReply = null)
+			=> tilexOnce((byte)Lead.TileX, data, refID, 0, onReply);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public async Task<int> TileX(MemoryFragment f)
@@ -190,6 +187,7 @@ namespace brays
 		public IPEndPoint Source => source;
 		public DateTime LastProbe => new DateTime(Volatile.Read(ref lastReceivedProbeTick));
 		public Exception Exception => exception;
+		public CfgX GetTargetConfig() => targetCfg.Clone();
 
 		bool beam(Block b)
 		{
@@ -217,7 +215,7 @@ namespace brays
 						}
 
 						// Wait if the socket is reconfiguring.
-						if (lockOnGate.IsAcquired) lockOnMRE.Wait();
+						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
 						var cc = Volatile.Read(ref ccBeams);
 
@@ -370,7 +368,7 @@ namespace brays
 
 					for (int i = 0; i < cfg.SendRetries; i++)
 					{
-						if (lockOnGate.IsAcquired) lockOnMRE.Wait();
+						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
 						var sent = socket.Send(frag, SocketFlags.None);
 
@@ -419,13 +417,11 @@ namespace brays
 
 			if (onTileXAwait != null) tileXAwaits.TryAdd(fid, new TileXAwait(onTileXAwait));
 
-			var ackq = signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
-			{
-				Volatile.Write(ref rsp, mark);
-				rst.Set();
-			}));
-
-			if (ackq)
+			if (signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
+				{
+					Volatile.Write(ref rsp, mark);
+					rst.Set();
+				})))
 			{
 				using (var frag = outHighway.Alloc(len))
 				using (rst = new ManualResetEventSlim(false))
@@ -436,12 +432,12 @@ namespace brays
 
 					for (int i = 0; i < cfg.SendRetries; i++)
 					{
-						if (lockOnGate.IsAcquired) lockOnMRE.Wait();
+						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
 						var sent = socket.Send(frag, SocketFlags.None);
 
-						if (sent == frag.Length) trace(TraceOps.TileX, fid, $"K: {kind}");
-						else trace(TraceOps.TileX, fid, $"Failed K: {kind} #{i + 1}");
+						if (sent == frag.Length) trace(TraceOps.TileX, fid, $"K: {(Lead)kind} #{i + 1}");
+						else trace(TraceOps.TileX, fid, $"Failed K: {(Lead)kind}");
 
 						if (rst.Wait(awaitMS)) break;
 
@@ -469,7 +465,7 @@ namespace brays
 
 				tilex.Write(frag);
 
-				if (lockOnGate.IsAcquired) lockOnMRE.Wait();
+				if (lockOnGate.IsAcquired) lockOnRst.Wait();
 				var sent = socket.Send(frag, SocketFlags.None);
 
 				if (sent == frag.Length) trace(TraceOps.TileX, fid, $"TileXOnce K: {kind}");
@@ -491,7 +487,8 @@ namespace brays
 					case Lead.Error: procError(f); break;
 					case Lead.Block: procBlock(f); break;
 					case Lead.Status: procStatus(f); break;
-					case Lead.CfgX: procTileX(f); break;
+					case Lead.TileX: procTileX(f); break;
+					case Lead.CfgX: procCfgX(f); break;
 					default:
 					break;
 				}
@@ -517,7 +514,7 @@ namespace brays
 
 			if (!cfg.EnableProbes)
 			{
-				if (lockOnGate.IsAcquired) lockOnMRE.Wait();
+				if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
 				socket.Send(probeLead);
 			}
@@ -529,26 +526,62 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				trace(TraceOps.DropFrame, f.FrameID, "TileX");
+				trace(TraceOps.DropFrame, f.FrameID, $"TileX R: {f.RefID}");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.TileX, f.FrameID, false)) return;
+			if (isClone(TraceOps.ProcTileX, f.FrameID)) return;
 
-			signal(f.FrameID, (int)SignalKind.ACK, false);
-			trace(TraceOps.ProcTileX, f.FrameID, $"K: {f.Kind}");
+			signal(f.FrameID, (int)SignalKind.ACK);
+			trace(TraceOps.ProcTileX, f.FrameID, $"K: {(Lead)f.Kind}");
+
+			MemoryFragment xf = null;
+
+			// The copying technically is not needed, but since the frames are
+			// internal types, the consumer would have to guess the data offset.
+			// Also the procTileX fragment will be disposed immediately after 
+			// this method exits (i.e. no async for the callback), unlike
+			// The newly created OnTileExchange frag which MUST be disposed 
+			// in the callback (or wait for a GC pass as the default 
+			// TileExchangeHighway tracks ghosts).
+
+			if (f.Data.Length > 0)
+			{
+				xf = tileXHigheay.AllocFragment(f.Data.Length);
+				f.Data.CopyTo(xf);
+			}
 
 			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta))
-				try
-				{
-					// [!] The OnTileExchange must be processed synchronously
-					// because the procFrame will dispose the fragment at the end
-					// of this method.
+				if (ta.OnTileExchange != null) ta.OnTileExchange(xf);
+				else onReceived(null);
+		}
 
-					trace(TraceOps.ProcTileX, f.FrameID, $"R: {f.RefID}");
-					ta.OnTileExchange(frag);
-				}
-				catch { }
+		void procCfgX(MemoryFragment frag)
+		{
+			var f = new TILEX(frag.Span());
+#if DEBUG
+			if (cfg.dropFrame())
+			{
+				trace(TraceOps.DropFrame, f.FrameID, $"CfgX R: {f.RefID}");
+				return;
+			}
+#endif
+			if (isClone(TraceOps.ProcTileX, f.FrameID)) return;
+			signal(f.FrameID, (int)SignalKind.ACK);
+
+			if (f.Data.Length == 0) ConfigExchange(f.FrameID);
+			else
+			{
+				var tcfg = new CfgX(f.Data);
+				Volatile.Write(ref targetCfg, tcfg);
+
+				if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) && ta.OnTileExchange != null)
+					ta.OnTileExchange(null);
+
+				trace(TraceOps.ProcTileX, f.FrameID, $"K: CfgX " +
+					$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
+					$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
+			}
 		}
 
 		void procBlock(MemoryFragment frag)
@@ -746,7 +779,7 @@ namespace brays
 				while (Volatile.Read(ref stop) < 1)
 					try
 					{
-						if (lockOnGate.IsAcquired) lockOnMRE.Wait();
+						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
 						var frag = inHighway.Alloc(UDP_MAX);
 						var read = await socket.ReceiveAsync(frag, SocketFlags.None).ConfigureAwait(false);
@@ -788,6 +821,8 @@ namespace brays
 				{
 					trace("Cleanup", $"Blocks: {blockMap.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
 
+					tileXHigheay.FreeGhosts();
+
 					foreach (var b in blockMap.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
 						{
@@ -811,7 +846,11 @@ namespace brays
 						if (DTN.Subtract(ss.Value.Created) > cfg.SentSignalsRetention)
 							sentSignalsFor.TryRemove(ss.Key, out SignalResponse x);
 				}
-				catch { }
+				catch (Exception ex)
+				{
+					trace("Ex", "Cleanup", ex.ToString());
+				}
+
 				await Task.Delay(cfg.CleanupFreqMS).ConfigureAwait(false);
 			}
 		}
@@ -904,7 +943,8 @@ namespace brays
 
 		HeapHighway outHighway;
 		IMemoryHighway blockHighway;
-		EmitterCfg cfg;
+		IMemoryHighway tileXHigheay;
+		BeamerCfg cfg;
 		IPEndPoint target;
 		IPEndPoint source;
 		Socket socket;
@@ -927,7 +967,7 @@ namespace brays
 		long lastReceivedDgramTick;
 		byte[] probeLead = new byte[] { (byte)Lead.Probe };
 
-		ManualResetEventSlim lockOnMRE = new ManualResetEventSlim(true);
+		ManualResetEventSlim lockOnRst = new ManualResetEventSlim(true);
 		Gate lockOnGate = new Gate();
 		Exception exception;
 		Task probingTask;

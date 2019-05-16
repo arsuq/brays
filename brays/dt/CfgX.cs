@@ -2,9 +2,9 @@
 
 namespace brays
 {
-	class CfgX
+	public class CfgX
 	{
-		public CfgX(EmitterCfg cfg)
+		public CfgX(BeamerCfg cfg)
 		{
 			MaxBeamedTilesAtOnce = cfg.MaxBeamedTilesAtOnce;
 			MaxConcurrentReceives = cfg.MaxConcurrentReceives;
@@ -26,6 +26,13 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(4), MaxConcurrentReceives);
 			BitConverter.TryWriteBytes(s.Slice(8), SendBufferSize);
 			BitConverter.TryWriteBytes(s.Slice(12), ReceiveBufferSize);
+		}
+
+		public CfgX Clone()
+		{
+			Span<byte> buff = stackalloc byte[LENGTH];
+			Write(buff);
+			return new CfgX(buff);
 		}
 
 		public const int LENGTH = 16;

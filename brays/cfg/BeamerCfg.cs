@@ -2,11 +2,16 @@
 
 namespace brays
 {
-	public class EmitterCfg
+	public class BeamerCfg
 	{
-		public EmitterCfg(IMemoryHighway receiveHighway = null, LogCfg logcfg = null)
+		public BeamerCfg(IMemoryHighway receiveHighway = null, IMemoryHighway tileXHighway = null, LogCfg logcfg = null)
 		{
 			ReceiveHighway = receiveHighway != null ? receiveHighway : new HeapHighway();
+			TileExchangeHighway = tileXHighway != null ?
+				tileXHighway :
+				new HeapHighway(
+					new HighwaySettings(ushort.MaxValue, 1000, MemoryLaneResetMode.TrackGhosts),
+					ushort.MaxValue, ushort.MaxValue, ushort.MaxValue);
 			Log = logcfg;
 		}
 
@@ -63,7 +68,7 @@ namespace brays
 		public int ErrorAwaitMS = 3000;
 
 		/// <summary>
-		/// After this number of receive retries the Emitter shuts down.
+		/// After this number of receive retries the Beamer shuts down.
 		/// </summary>
 		public int MaxReceiveRetries = 8;
 
@@ -75,7 +80,7 @@ namespace brays
 		/// <summary>
 		/// The SendRetries loop await. 
 		/// </summary>
-		public int RetryDelayStartMS = 20;
+		public int RetryDelayStartMS = 80;
 
 		/// <summary>
 		/// After each retry the RetryDelayStartMS is multiplied by this value.
@@ -133,6 +138,11 @@ namespace brays
 		/// Where the blocks are assembled.
 		/// </summary>
 		public IMemoryHighway ReceiveHighway;
+
+		/// <summary>
+		/// Where the tileX response fragments are allocated.
+		/// </summary>
+		public IMemoryHighway TileExchangeHighway;
 
 #if DEBUG
 		internal bool dropFrame()

@@ -159,7 +159,7 @@ namespace brays
 			FrameID = BitConverter.ToInt32(s.Slice(1));
 			RefID = BitConverter.ToInt32(s.Slice(5));
 			Length = BitConverter.ToUInt16(s.Slice(9));
-			Data = s.Slice(HEADER);
+			Data = s.Slice(HEADER, Length);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -167,7 +167,8 @@ namespace brays
 		{
 			s[0] = Kind;
 			BitConverter.TryWriteBytes(s.Slice(1), FrameID);
-			BitConverter.TryWriteBytes(s.Slice(5), Length);
+			BitConverter.TryWriteBytes(s.Slice(5), RefID);
+			BitConverter.TryWriteBytes(s.Slice(9), Length);
 			Data.CopyTo(s.Slice(HEADER));
 		}
 

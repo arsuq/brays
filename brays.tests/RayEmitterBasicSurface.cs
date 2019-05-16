@@ -22,10 +22,11 @@ namespace brays.tests
 #if DEBUG
 			//await missingTiles();
 			//await M30();
+			await configExchange();
 #endif
 
-			for (int i = 0; i < 4; i++)
-				await halfGigNoLogNoVerify();
+			//for (int i = 0; i < 4; i++)
+			//	await halfGigNoLogNoVerify();
 		}
 
 		async Task oneByteDgram()
@@ -41,7 +42,7 @@ namespace brays.tests
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 				rayA = new RayBeamer((f) => { Console.WriteLine("?"); },
-					new EmitterCfg() { Log = new LogCfg("rayA", true) });
+					new BeamerCfg() { Log = new LogCfg("rayA", true) });
 				rayB = new RayBeamer((f) =>
 				{
 					if (f.Span()[0] == 1)
@@ -57,7 +58,7 @@ namespace brays.tests
 
 					rst.Set();
 
-				}, new EmitterCfg() { Log = new LogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new LogCfg("rayB", true) });
 
 				using (var hw = new HeapHighway(50))
 				{
@@ -114,7 +115,7 @@ namespace brays.tests
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
-					new EmitterCfg() { Log = new LogCfg("rayA", true) });
+					new BeamerCfg() { Log = new LogCfg("rayA", true) });
 				rayB = new RayBeamer((f) =>
 				{
 					try
@@ -144,7 +145,7 @@ namespace brays.tests
 					{
 						rst.Set();
 					}
-				}, new EmitterCfg() { Log = new LogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new LogCfg("rayB", true) });
 
 				using (var hw = new HeapHighway())
 				{
@@ -203,7 +204,7 @@ namespace brays.tests
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
-					new EmitterCfg()
+					new BeamerCfg()
 					{
 						Log = new LogCfg("rayA", true),
 #if DEBUG
@@ -240,7 +241,7 @@ namespace brays.tests
 					{
 						rst.Set();
 					}
-				}, new EmitterCfg()
+				}, new BeamerCfg()
 				{
 					Log = new LogCfg("rayB", true),
 #if DEBUG
@@ -356,7 +357,7 @@ namespace brays.tests
 
 				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
-					new EmitterCfg()
+					new BeamerCfg()
 					{
 						Log = new LogCfg("rayA", true, (TraceOps)2047) { OnTrace = null },
 #if DEBUG
@@ -366,7 +367,7 @@ namespace brays.tests
 					});
 
 
-				rayB = new RayBeamer(receive, new EmitterCfg()
+				rayB = new RayBeamer(receive, new BeamerCfg()
 				{
 					Log = new LogCfg("rayB", true, (TraceOps)2047) { OnTrace = null },
 #if DEBUG
@@ -498,12 +499,12 @@ namespace brays.tests
 
 				var traceops = (TraceOps.ReqTiles | TraceOps.TileX | TraceOps.ProcTileX);
 
-				rayA = new RayBeamer((f) => { }, new EmitterCfg()
+				rayA = new RayBeamer((f) => { }, new BeamerCfg()
 				{
 					//Log = new LogCfg("rayA", true, traceops),
 					TileSizeBytes = 60000
 				});
-				rayB = new RayBeamer(receive, new EmitterCfg()
+				rayB = new RayBeamer(receive, new BeamerCfg()
 				{
 					Log = new LogCfg("rayB", true, traceops),
 					TileSizeBytes = 60000
@@ -560,5 +561,96 @@ namespace brays.tests
 				rayB.Dispose();
 			}
 		}
+
+		async Task configExchange()
+		{
+			"[In] configExchange()".AsTestInfo();
+
+			RayBeamer rayA = null;
+			RayBeamer rayB = null;
+
+			const int CFGA = 11;
+			const int CFGB = 12;
+
+			try
+			{
+				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
+				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+
+				rayA = new RayBeamer((f) => { }, new BeamerCfg()
+				{
+					Log = new LogCfg("rayA", true),
+					MaxBeamedTilesAtOnce = CFGA
+#if DEBUG
+					, dropFrames = true,
+					deopFramePercent = 50
+#endif
+				});
+
+				rayB = new RayBeamer((f) => { }, new BeamerCfg()
+				{
+					Log = new LogCfg("rayB", true),
+					MaxBeamedTilesAtOnce = CFGB
+#if DEBUG
+					, dropFrames = true,
+					deopFramePercent = 50
+#endif
+				});
+
+				var ta = new Task(() =>
+				{
+					if (rayA.LockOn(aep, bep, true))
+					{
+						// The remote config must be available here
+						var tc = rayA.GetTargetConfig();
+						if (tc == null || tc.MaxBeamedTilesAtOnce != CFGB)
+						{
+							Passed = false;
+							FailureMessage = "The remote config B is not correct or is missing.";
+						}
+					}
+
+				});
+
+				var tb = new Task(() =>
+				{
+					if (rayB.LockOn(bep, aep, true))
+					{
+						var tc = rayB.GetTargetConfig();
+						if (tc == null || tc.MaxBeamedTilesAtOnce != CFGA)
+						{
+							Passed = false;
+							FailureMessage = "The remote config A is not correct or is missing.";
+						}
+					}
+				});
+
+				ta.Start();
+				tb.Start();
+
+				if (!Task.WaitAll(new Task[] { ta, tb }, new TimeSpan(0, 2, 0)))
+				{
+					Passed = false;
+					FailureMessage = "Timeout.";
+					FailureMessage.AsError();
+				}
+
+				await Task.Delay(0);
+
+				if (Passed.HasValue && !Passed.Value) "configExchange() failed".AsError();
+				else "OK: configExchange()".AsSuccess();
+			}
+			catch (Exception ex)
+			{
+				FailureMessage = ex.Message;
+				Passed = false;
+			}
+			finally
+			{
+				rayA.Dispose();
+				rayB.Dispose();
+			}
+		}
+
 	}
 }
