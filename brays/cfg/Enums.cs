@@ -14,7 +14,7 @@ namespace brays
 		TileX
 	}
 
-	enum SignalKind : int
+	public enum SignalKind : int
 	{
 		NOTSET = 0,
 		ACK = 1,

@@ -29,21 +29,28 @@ namespace brays
 
 		public void Dispose()
 		{
-			if (outHighway != null)
+			if (!isDisposed)
 				try
 				{
 					Interlocked.Exchange(ref stop, 1);
-					outHighway.Dispose();
-					blockHighway.Dispose();
-					socket.Dispose();
+					outHighway?.Dispose();
+					blockHighway?.Dispose();
+					tileXHigheay?.Dispose();
+					socket?.Dispose();
 					outHighway = null;
 					blockHighway = null;
-					if (log != null) log.Dispose();
+					tileXHigheay = null;
 
-					foreach (var b in blockMap.Values)
-						if (b != null) b.Dispose();
+					if (log != null) log.Dispose();
+					if (blocks != null)
+						foreach (var b in blocks.Values)
+							if (b != null) b.Dispose();
 				}
 				catch { }
+				finally
+				{
+					isDisposed = true;
+				}
 		}
 
 		public void Stop() => Volatile.Write(ref stop, 1);
@@ -117,7 +124,7 @@ namespace brays
 			// If the refID is 0 the cfg is treated as a request.
 			if (refID > 0)
 			{
-				var cfgx = new CfgX(cfg);
+				var cfgx = new CfgX(cfg, source);
 				cfgx.Write(s);
 			}
 
@@ -141,11 +148,8 @@ namespace brays
 			else return tilex((byte)Lead.CfgX, s, refID, fid) == (int)SignalKind.ACK;
 		}
 
-		public int TileX(Span<byte> data, int refID = 0, Action<MemoryFragment> onReply = null)
-			=> tilex((byte)Lead.TileX, data, refID, 0, onReply);
-
-		public void TileXFF(Span<byte> data, int refID = 0, Action<MemoryFragment> onReply = null)
-			=> tilexOnce((byte)Lead.TileX, data, refID, 0, onReply);
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void TileXFF(Span<byte> data) => tilexOnce((byte)Lead.TileX, data, 0, 0, null);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public async Task<int> TileX(MemoryFragment f)
@@ -160,7 +164,7 @@ namespace brays
 			var bid = Interlocked.Increment(ref blockCounter);
 			var b = new Block(bid, cfg.TileSizeBytes, f);
 
-			if (blockMap.TryAdd(bid, b))
+			if (blocks.TryAdd(bid, b))
 				try
 				{
 					b.beamTiles = beamLoop(b);
@@ -186,7 +190,6 @@ namespace brays
 		public IPEndPoint Target => target;
 		public IPEndPoint Source => source;
 		public DateTime LastProbe => new DateTime(Volatile.Read(ref lastReceivedProbeTick));
-		public Exception Exception => exception;
 		public CfgX GetTargetConfig() => targetCfg.Clone();
 
 		bool beam(Block b)
@@ -363,7 +366,7 @@ namespace brays
 					var map = string.Empty;
 					var awaitMS = cfg.RetryDelayStartMS;
 
-					if (blockMap.TryGetValue(blockID, out Block b) && tileMap.Length > 0)
+					if (blocks.TryGetValue(blockID, out Block b) && tileMap.Length > 0)
 						map = $"M: {b.tileMap.ToString()} ";
 
 					for (int i = 0; i < cfg.SendRetries; i++)
@@ -473,6 +476,38 @@ namespace brays
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		bool isClone(TraceOps op, int frameID, bool signalWithLastReply = true)
+		{
+			if (!procFrames.TryAdd(frameID, DateTime.Now))
+			{
+				int crpl = -1;
+
+				if (signalWithLastReply && sentSignalsFor.TryGetValue(frameID, out SignalResponse sr))
+				{
+					signal(frameID, sr.Mark, sr.IsError);
+					crpl = sr.Mark;
+				}
+
+				trace(op, frameID, $"Clone Cached reply: {crpl}");
+				return true;
+			}
+			else return false;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		void procProbe()
+		{
+			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
+
+			if (!cfg.EnableProbes)
+			{
+				if (lockOnGate.IsAcquired) lockOnRst.Wait();
+
+				socket.Send(probeLead);
+			}
+		}
+
 		void procFrame(MemoryFragment f)
 		{
 			try
@@ -504,19 +539,6 @@ namespace brays
 			finally
 			{
 				f.Dispose();
-			}
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void procProbe()
-		{
-			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
-
-			if (!cfg.EnableProbes)
-			{
-				if (lockOnGate.IsAcquired) lockOnRst.Wait();
-
-				socket.Send(probeLead);
 			}
 		}
 
@@ -553,7 +575,7 @@ namespace brays
 
 			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta))
 				if (ta.OnTileExchange != null) ta.OnTileExchange(xf);
-				else onReceived(null);
+				else onReceived(xf);
 		}
 
 		void procCfgX(MemoryFragment frag)
@@ -595,14 +617,14 @@ namespace brays
 			}
 #endif
 			if (isClone(TraceOps.ProcBlock, f.FrameID)) return;
-			if (!blockMap.ContainsKey(f.BlockID))
+			if (!blocks.ContainsKey(f.BlockID))
 			{
 				// Reject logic + Error or:
-				if (blockMap.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, cfg.TileSizeBytes, blockHighway)))
+				if (blocks.TryAdd(f.BlockID, new Block(f.BlockID, f.TotalSize, cfg.TileSizeBytes, blockHighway)))
 					signal(f.FrameID, (int)SignalKind.ACK);
 			}
 
-			var b = blockMap[f.BlockID];
+			var b = blocks[f.BlockID];
 
 			if (!b.Receive(f))
 			{
@@ -647,7 +669,7 @@ namespace brays
 				{
 					case ErrorCode.Rejected:
 					{
-						if (blockMap.TryGetValue(sg.RefID, out Block b))
+						if (blocks.TryGetValue(sg.RefID, out Block b))
 						{
 							Volatile.Write(ref b.isRejected, true);
 							trace(TraceOps.ProcError, sg.FrameID, $"Rejected B: [{sg.RefID}.");
@@ -674,7 +696,7 @@ namespace brays
 			}
 #endif
 			if (!isClone(TraceOps.ProcStatus, st.FrameID))
-				if (blockMap.TryGetValue(st.BlockID, out Block b))
+				if (blocks.TryGetValue(st.BlockID, out Block b))
 				{
 					// ACK the frame regardless of the context.
 					signal(st.FrameID, (int)SignalKind.ACK);
@@ -695,7 +717,7 @@ namespace brays
 						if (b.IsComplete)
 						{
 							trace(TraceOps.ProcStatus, st.FrameID, $"Out B: {st.BlockID} completed.");
-							blockMap.TryRemove(st.BlockID, out Block rem);
+							blocks.TryRemove(st.BlockID, out Block rem);
 							b.Dispose();
 						}
 						else
@@ -712,26 +734,6 @@ namespace brays
 					signal(st.FrameID, (int)SignalKind.UNK);
 					trace(TraceOps.ProcStatus, st.FrameID, $"Unknown B: {st.BlockID}");
 				}
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		bool isClone(TraceOps op, int frameID, bool signalWithLastReply = true)
-		{
-			if (!procFrames.TryAdd(frameID, DateTime.Now))
-			{
-				var s = string.Empty;
-
-				if (signalWithLastReply && sentSignalsFor.TryGetValue(frameID, out SignalResponse sr))
-				{
-					signal(frameID, sr.Mark, sr.IsError);
-					s = $"Cached Reply M: {sr.Mark}";
-				}
-
-				trace(op, frameID, $"Clone {s}");
-
-				return true;
-			}
-			else return false;
 		}
 
 		void procSignal(MemoryFragment frag)
@@ -754,11 +756,6 @@ namespace brays
 					}
 					catch { }
 				else trace(TraceOps.ProcSignal, sg.FrameID, $"NoAwait M: {sg.Mark} R: {sg.RefID}");
-		}
-
-		void suggestTileSize()
-		{
-			// 2d0
 		}
 
 		async Task probe()
@@ -804,11 +801,10 @@ namespace brays
 					}
 					catch (Exception ex)
 					{
-						Interlocked.Exchange(ref exception, ex);
+						trace("Ex", "Receive", ex.ToString());
 					}
 
 			trace("Receive", "Not listening.");
-			Interlocked.Exchange(ref stop, 1);
 		}
 
 		async Task cleanup()
@@ -819,14 +815,14 @@ namespace brays
 
 				try
 				{
-					trace("Cleanup", $"Blocks: {blockMap.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
+					trace("Cleanup", $"Blocks: {blocks.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
 
 					tileXHigheay.FreeGhosts();
 
-					foreach (var b in blockMap.Values)
+					foreach (var b in blocks.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
 						{
-							blockMap.TryRemove(b.ID, out Block x);
+							blocks.TryRemove(b.ID, out Block x);
 							b.Dispose();
 						}
 
@@ -953,9 +949,7 @@ namespace brays
 #if DEBUG
 		int ccBeamsFuse;
 #endif
-
 		int ccBeams;
-		long lastBeamBurstTick;
 
 		int frameCounter;
 		int blockCounter;
@@ -963,20 +957,22 @@ namespace brays
 		int stop;
 		int retries;
 		bool isLocked;
+		bool isDisposed;
 		long lastReceivedProbeTick;
 		long lastReceivedDgramTick;
 		byte[] probeLead = new byte[] { (byte)Lead.Probe };
 
 		ManualResetEventSlim lockOnRst = new ManualResetEventSlim(true);
 		Gate lockOnGate = new Gate();
-		Exception exception;
 		Task probingTask;
 		Task cleanupTask;
 		Task[] receivers;
 		CfgX targetCfg;
 
+		// All keys are frame or block IDs
+
 		ConcurrentDictionary<int, SignalAwait> signalAwaits = new ConcurrentDictionary<int, SignalAwait>();
-		ConcurrentDictionary<int, Block> blockMap = new ConcurrentDictionary<int, Block>();
+		ConcurrentDictionary<int, Block> blocks = new ConcurrentDictionary<int, Block>();
 		ConcurrentDictionary<int, DateTime> procFrames = new ConcurrentDictionary<int, DateTime>();
 		ConcurrentDictionary<int, SignalResponse> sentSignalsFor = new ConcurrentDictionary<int, SignalResponse>();
 		ConcurrentDictionary<int, TileXAwait> tileXAwaits = new ConcurrentDictionary<int, TileXAwait>();
