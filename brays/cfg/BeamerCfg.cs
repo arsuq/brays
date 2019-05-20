@@ -15,6 +15,20 @@ namespace brays
 			Log = logcfg;
 		}
 
+		#region TSR
+
+		public int SendQueueBlockingIndex;
+
+		public int PackSleepMS;
+		public int SendSleepMS;
+
+		#endregion
+
+
+
+
+
+
 		/// <summary>
 		/// The await for the remote config when exchanging.
 		/// </summary>

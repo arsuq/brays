@@ -299,7 +299,7 @@ namespace brays
 				}
 
 			b.sentTime = DateTime.Now;
-			return status(b.ID, sent, true, null);
+			return status(b.ID, sent, true, null).Result;
 		}
 
 		async Task<bool> beamLoop(Block b)
@@ -339,7 +339,7 @@ namespace brays
 				Volatile.Write(ref b.beamTiles, beamLoop(b));
 		}
 
-		bool status(int blockID, int tilesCount, bool awaitRsp, Span<byte> tileMap)
+		async Task<bool> status(int blockID, int tilesCount, bool awaitRsp, MemoryFragment tileMap)
 		{
 			if (Volatile.Read(ref stop) > 0) return false;
 
@@ -365,6 +365,7 @@ namespace brays
 				{
 					var map = string.Empty;
 					var awaitMS = cfg.RetryDelayStartMS;
+					var awaitRst = rst.WaitHandle.AsTask(awaitMS);
 
 					if (blocks.TryGetValue(blockID, out Block b) && tileMap.Length > 0)
 						map = $"M: {b.tileMap.ToString()} ";
@@ -378,8 +379,9 @@ namespace brays
 						if (sent == 0) trace(TraceOps.Status, fid, $"Socket sent 0 bytes. B: {blockID} #{i + 1}");
 						else trace(TraceOps.Status, fid, $"B: {blockID} {map} #{i + 1}");
 
-						if (!awaitRsp || rst.Wait(awaitMS)) break;
+						if (!awaitRsp || await awaitRst) break;
 						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
+						awaitRst = rst.WaitHandle.AsTask(awaitMS);
 					}
 				}
 
@@ -881,6 +883,45 @@ namespace brays
 			}
 		}
 
+
+		void pack()
+		{
+			try
+			{
+				while (true)
+				{
+					packRst.WaitOne();
+
+					while (true)
+					{
+						var frag = outHighway.Alloc(cfg.TileSizeBytes);
+						var gram = new TileDgram(frag);
+						var bytes = 0;
+
+						for (int i = 0; i < sendQ.AppendIndex; i++)
+						{
+							var qf = sendQ.Take(i);
+
+							// 2 bytes for the length
+							if (qf.Length + 2 + bytes < frag.Length)
+							{
+								var pos = frag.Write((ushort)qf.Length, bytes);
+								qf.Span().CopyTo(frag.Span().Slice(pos));
+								bytes += qf.Length + 2;
+							}
+
+							var fid = Interlocked.Increment(ref frameCounter);
+							sendRetryMap.TryAdd(fid, gram);
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				trace("Ex", "Pack", ex.ToString());
+			}
+		}
+
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void trace(TraceOps op, int frame, string title, string msg = null)
 		{
@@ -976,6 +1017,14 @@ namespace brays
 		ConcurrentDictionary<int, DateTime> procFrames = new ConcurrentDictionary<int, DateTime>();
 		ConcurrentDictionary<int, SignalResponse> sentSignalsFor = new ConcurrentDictionary<int, SignalResponse>();
 		ConcurrentDictionary<int, TileXAwait> tileXAwaits = new ConcurrentDictionary<int, TileXAwait>();
+
+
+		ConcurrentDictionary<int, TileDgram> sendRetryMap = new ConcurrentDictionary<int, TileDgram>();
+		Tesseract<MemoryFragment> sendQ = new Tesseract<MemoryFragment>();
+
+		Thread senderThr;
+		Thread packerThr;
+		ManualResetEvent packRst;
 
 		public const ushort UDP_MAX = ushort.MaxValue;
 	}
