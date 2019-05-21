@@ -17,12 +17,12 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
-			//	await oneByteDgram();
-			//await oneMeg();
+			await oneByteDgram();
+			await oneMeg();
 #if DEBUG
-			//await missingTiles();
-			//await M30();
-			await configExchange();
+			await missingTiles();
+			await M30();
+			//await configExchange();
 #endif
 
 			//for (int i = 0; i < 4; i++)

@@ -44,6 +44,19 @@ namespace brays
 			if (!headerOnly) Data.CopyTo(s.Slice(HEADER));
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Make(int fid, int bid, int ts, int ti, ushort l, byte o, Span<byte> data, Span<byte> t)
+		{
+			t[0] = (byte)Lead.Block;
+			BitConverter.TryWriteBytes(t.Slice(1), fid);
+			BitConverter.TryWriteBytes(t.Slice(5), bid);
+			BitConverter.TryWriteBytes(t.Slice(9), ts);
+			BitConverter.TryWriteBytes(t.Slice(13), ti);
+			BitConverter.TryWriteBytes(t.Slice(17), l);
+			t[19] = o;
+			if (data.Length > 0) data.CopyTo(t.Slice(HEADER));
+		}
+
 		public readonly byte Kind;
 		public readonly int FrameID;
 		public readonly int BlockID;
@@ -119,7 +132,7 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(1), FrameID);
 			BitConverter.TryWriteBytes(s.Slice(5), BlockID);
 			BitConverter.TryWriteBytes(s.Slice(9), TileCount);
-			TileMap.CopyTo(s.Slice(HEADER));
+			if (TileMap.Length > 0) TileMap.CopyTo(s.Slice(HEADER));
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -129,7 +142,7 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(1), fid);
 			BitConverter.TryWriteBytes(s.Slice(5), bid);
 			BitConverter.TryWriteBytes(s.Slice(9), tc);
-			if (map != null) map.CopyTo(s.Slice(HEADER));
+			if (map.Length > 0) map.CopyTo(s.Slice(HEADER));
 		}
 
 		public readonly byte Kind;

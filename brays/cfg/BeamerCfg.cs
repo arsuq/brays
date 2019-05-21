@@ -94,7 +94,7 @@ namespace brays
 		/// <summary>
 		/// The SendRetries loop await. 
 		/// </summary>
-		public int RetryDelayStartMS = 80;
+		public int RetryDelayStartMS = 100;
 
 		/// <summary>
 		/// After each retry the RetryDelayStartMS is multiplied by this value.
