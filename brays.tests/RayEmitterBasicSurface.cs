@@ -22,11 +22,11 @@ namespace brays.tests
 #if DEBUG
 			await missingTiles();
 			await M30();
-			//await configExchange();
+			await configExchange();
 #endif
 
-			//for (int i = 0; i < 4; i++)
-			//	await halfGigNoLogNoVerify();
+			for (int i = 0; i < 4; i++)
+				await halfGigNoLogNoVerify();
 		}
 
 		async Task oneByteDgram()
@@ -45,7 +45,7 @@ namespace brays.tests
 					new BeamerCfg() { Log = new LogCfg("rayA", true) });
 				rayB = new RayBeamer((f) =>
 				{
-					if (f.Span()[0] == 1)
+					if (f.Span()[0] == 77)
 					{
 						Passed = true;
 						"OK: rayB received 1 byte.".AsSuccess();
@@ -64,17 +64,17 @@ namespace brays.tests
 				{
 					var ta = new Task(async () =>
 					{
-						rayA.LockOn(aep, bep);
+						rayA.LockOn(aep, bep).Wait();
 
 						var f = hw.Alloc(1);
 
-						f.Write(true, 0);
+						f.Write((byte)77, 0);
 						await rayA.Beam(f);
 					});
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep);
+						rayB.LockOn(bep, aep).Wait();
 					});
 
 					ta.Start();
@@ -151,7 +151,7 @@ namespace brays.tests
 				{
 					var ta = new Task(async () =>
 					{
-						rayA.LockOn(aep, bep);
+						rayA.LockOn(aep, bep).Wait();
 
 						var f = hw.Alloc(MEG);
 
@@ -163,7 +163,7 @@ namespace brays.tests
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep);
+						rayB.LockOn(bep, aep).Wait();
 					});
 
 					ta.Start();
@@ -254,7 +254,7 @@ namespace brays.tests
 				{
 					var ta = new Task(async () =>
 					{
-						rayA.LockOn(aep, bep);
+						rayA.LockOn(aep, bep).Wait();
 
 						var f = hw.Alloc(MEG);
 
@@ -266,7 +266,7 @@ namespace brays.tests
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep);
+						rayB.LockOn(bep, aep).Wait();
 					});
 
 					ta.Start();
@@ -380,7 +380,7 @@ namespace brays.tests
 				{
 					var ta = new Task(() =>
 					{
-						rayA.LockOn(aep, bep);
+						rayA.LockOn(aep, bep).Wait();
 
 						while (!rayA.IsStopped)
 						{
@@ -391,7 +391,7 @@ namespace brays.tests
 								f[i] = 43;
 
 							f.Write(len, 0);
-							rayA.Beam(f);
+							rayA.Beam(f).Wait();
 
 							var fo = Interlocked.Increment(ref totalFragsOut);
 							var ts = Interlocked.Add(ref totalSend, len);
@@ -406,7 +406,7 @@ namespace brays.tests
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep);
+						rayB.LockOn(bep, aep).Wait();
 					});
 
 					ta.Start();
@@ -514,7 +514,7 @@ namespace brays.tests
 				{
 					var ta = new Task(() =>
 					{
-						rayA.LockOn(aep, bep, true);
+						rayA.LockOn(aep, bep, true).Wait();
 
 						while (!rayA.IsStopped)
 						{
@@ -522,7 +522,7 @@ namespace brays.tests
 							var f = hw.Alloc(len);
 
 							f.Write(len, 0);
-							rayA.Beam(f);
+							rayA.Beam(f).Wait();
 
 							Interlocked.Increment(ref totalFragsOut);
 							if (Interlocked.Add(ref totalSend, len) > CAP) break;
@@ -533,7 +533,7 @@ namespace brays.tests
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep, true);
+						rayB.LockOn(bep, aep, true).Wait();
 					});
 
 					ta.Start();
@@ -599,7 +599,7 @@ namespace brays.tests
 
 				var ta = new Task(() =>
 				{
-					if (rayA.LockOn(aep, bep, true))
+					if (rayA.LockOn(aep, bep, true).Result)
 					{
 						// The remote config must be available here
 						var tc = rayA.GetTargetConfig();
@@ -614,7 +614,7 @@ namespace brays.tests
 
 				var tb = new Task(() =>
 				{
-					if (rayB.LockOn(bep, aep, true))
+					if (rayB.LockOn(bep, aep, true).Result)
 					{
 						var tc = rayB.GetTargetConfig();
 						if (tc == null || tc.MaxBeamedTilesAtOnce != CFGA)

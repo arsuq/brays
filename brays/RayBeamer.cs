@@ -55,7 +55,7 @@ namespace brays
 
 		public void Stop() => Volatile.Write(ref stop, 1);
 
-		public bool LockOn(IPEndPoint listen, IPEndPoint target, bool configExchange = false)
+		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, bool configExchange = false)
 		{
 			if (lockOnGate.Enter())
 				try
@@ -89,7 +89,7 @@ namespace brays
 
 					if (configExchange)
 					{
-						if (!ConfigExchange(0, true))
+						if (!await ConfigExchange(0, true))
 						{
 							Volatile.Write(ref stop, 1);
 							return false;
@@ -110,82 +110,68 @@ namespace brays
 				}
 				finally
 				{
-
 					lockOnGate.Exit();
 				}
 
 			return false;
 		}
 
-		public bool ConfigExchange(int refID = 0, bool awaitRemote = false)
+		public async Task<bool> ConfigExchange(int refID = 0, bool awaitRemote = false)
 		{
-			Span<byte> s = refID > 0 ? stackalloc byte[CfgX.LENGTH] : default;
+			var sf = refID > 0 ? outHighway.Alloc(CfgX.LENGTH) : null;
 
 			// If the refID is 0 the cfg is treated as a request.
 			if (refID > 0)
 			{
 				var cfgx = new CfgX(cfg, source);
-				cfgx.Write(s);
+				cfgx.Write(sf);
 			}
 
 			var fid = Interlocked.Increment(ref frameCounter);
-			ManualResetEventSlim rst = null;
+			var rst = new TaskEvent();
 
 			if (awaitRemote)
 			{
-				rst = new ManualResetEventSlim(false);
-
 				void cfgReceived(MemoryFragment frag)
 				{
 					rst.Set();
 					if (frag != null) frag.Dispose();
 				}
 
-				if (tilex((byte)Lead.CfgX, s, refID, fid, cfgReceived) != (int)SignalKind.ACK) return false;
+				if (await tilex((byte)Lead.CfgX, sf, refID, fid, cfgReceived) != (int)SignalKind.ACK) return false;
 
-				return rst.Wait(cfg.ConfigExchangeTimeout);
+				return await rst.Wait(cfg.ConfigExchangeTimeout);
 			}
-			else return tilex((byte)Lead.CfgX, s, refID, fid) == (int)SignalKind.ACK;
+			else return await tilex((byte)Lead.CfgX, sf, refID, fid) == (int)SignalKind.ACK;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void TileXFF(Span<byte> data) => tilexOnce((byte)Lead.TileX, data, 0, 0, null);
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public async Task<int> TileX(MemoryFragment f)
-			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span(), 0)).ConfigureAwait(false);
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public async Task<int> TileX(MemoryFragment f, int start, int len)
-			=> await Task.Run(() => tilex((byte)Lead.TileX, f.Span().Slice(start, len), 0)).ConfigureAwait(false);
-
 		public async Task<bool> Beam(MemoryFragment f)
 		{
-			var bid = Interlocked.Increment(ref blockCounter);
-			var b = new Block(bid, cfg.TileSizeBytes, f);
+			try
+			{
+				if (f.Length <= cfg.TileSizeBytes)
+					return await tilex((byte)Lead.TileX, f).ConfigureAwait(false) == (int)SignalKind.ACK;
+				else
+				{
+					var bid = Interlocked.Increment(ref blockCounter);
+					var b = new Block(bid, cfg.TileSizeBytes, f);
 
-			if (blocks.TryAdd(bid, b))
-				try
-				{
-					if (f.Length < cfg.TileSizeBytes)
-					{
-						return false;
-					}
-					else
-					{
-						b.beamTiles = beamLoop(b);
-
-						return await b.beamTiles.ConfigureAwait(false);
-					}
+					blocks.TryAdd(bid, b);
+					b.beamTiles = beamLoop(b);
+					return await b.beamTiles.ConfigureAwait(false);
 				}
-				catch (AggregateException aex)
-				{
-					trace("Ex", "Beam", aex.Flatten().ToString());
-				}
-				catch (Exception ex)
-				{
-					trace("Ex", "Beam", ex.ToString());
-				}
+			}
+			catch (AggregateException aex)
+			{
+				trace("Ex", "Beam", aex.Flatten().ToString());
+			}
+			catch (Exception ex)
+			{
+				trace("Ex", "Beam", ex.ToString());
+			}
 
 			return false;
 		}
@@ -271,7 +257,7 @@ namespace brays
 							{
 								FRAME.Make(fid, b.ID, b.TotalSize, i,
 									(ushort)(dgramLen - FRAME.HEADER), 0,
-									b.Fragment.Span().Slice(FRAME.HEADER, dgramLen - FRAME.HEADER), mf);
+									b.Fragment.Span().Slice(0, dgramLen - FRAME.HEADER), mf);
 
 								sentBytes = socket.Send(mf);
 							}
@@ -428,17 +414,21 @@ namespace brays
 			return sent;
 		}
 
-		int tilex(byte kind, Span<byte> data, int refid, int fid = 0, Action<MemoryFragment> onTileXAwait = null)
+		async Task<int> tilex(byte kind, MemoryFragment data,
+			int refid = 0, int fid = 0, Action<MemoryFragment> onTileXAwait = null)
 		{
-			if (data.Length > cfg.TileSizeBytes) throw new ArgumentException("data size");
+			// [!] The data could be null if CfgX request.
+
+			var dataLen = data != null ? data.Length : 0;
+
+			if (dataLen > cfg.TileSizeBytes) throw new ArgumentException("data size");
 			if (Volatile.Read(ref stop) > 0) return (int)SignalKind.NOTSET;
 
 			var te = new TaskEvent();
 
 			if (fid == 0) fid = Interlocked.Increment(ref frameCounter);
-			var len = data.Length + TILEX.HEADER;
+			var len = dataLen + TILEX.HEADER;
 			var rsp = 0;
-			var tilex = new TILEX(kind, fid, refid, 0, data);
 
 			if (onTileXAwait != null) tileXAwaits.TryAdd(fid, new TileXAwait(onTileXAwait));
 
@@ -450,7 +440,8 @@ namespace brays
 			{
 				using (var frag = outHighway.Alloc(len))
 				{
-					tilex.Write(frag);
+					if (dataLen > 0) TILEX.Make(kind, fid, refid, (ushort)dataLen, data, frag);
+					else TILEX.Make(kind, fid, refid, 0, default, frag);
 
 					var awaitMS = cfg.RetryDelayStartMS;
 
@@ -463,8 +454,7 @@ namespace brays
 						if (sent == frag.Length) trace(TraceOps.TileX, fid, $"K: {(Lead)kind} #{i + 1}");
 						else trace(TraceOps.TileX, fid, $"Failed K: {(Lead)kind}");
 
-						if (te.Wait(awaitMS).Result) break;
-
+						if (await te.Wait(awaitMS)) break;
 						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
 					}
 				}
@@ -594,9 +584,9 @@ namespace brays
 				f.Data.CopyTo(xf);
 			}
 
-			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta))
-				if (ta.OnTileExchange != null) ta.OnTileExchange(xf);
-				else onReceived(xf);
+			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) &&
+				ta.OnTileExchange != null) ta.OnTileExchange(xf);
+			else onReceived(xf);
 		}
 
 		void procCfgX(MemoryFragment frag)

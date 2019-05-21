@@ -182,7 +182,17 @@ namespace brays
 			BitConverter.TryWriteBytes(s.Slice(1), FrameID);
 			BitConverter.TryWriteBytes(s.Slice(5), RefID);
 			BitConverter.TryWriteBytes(s.Slice(9), Length);
-			Data.CopyTo(s.Slice(HEADER));
+			if (Data.Length > 0) Data.CopyTo(s.Slice(HEADER));
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Make(byte kind, int fid, int refid, ushort l, Span<byte> data, Span<byte> t)
+		{
+			t[0] = kind;
+			BitConverter.TryWriteBytes(t.Slice(1), fid);
+			BitConverter.TryWriteBytes(t.Slice(5), refid);
+			BitConverter.TryWriteBytes(t.Slice(9), l);
+			if (data.Length > 0) data.CopyTo(t.Slice(HEADER));
 		}
 
 		public readonly byte Kind;
