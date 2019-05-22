@@ -24,9 +24,10 @@ namespace brays.tests
 			await M30();
 			await configExchange();
 #endif
-
 			for (int i = 0; i < 4; i++)
 				await halfGigNoLogNoVerify();
+
+			IsComplete = true;
 		}
 
 		async Task oneByteDgram()
@@ -497,7 +498,7 @@ namespace brays.tests
 					}
 				}
 
-				var traceops = (TraceOps.ReqTiles | TraceOps.TileX | TraceOps.ProcTileX);
+				var traceops = (TraceOps.ReqTiles | TraceOps.Tile | TraceOps.ProcTile);
 
 				rayA = new RayBeamer((f) => { }, new BeamerCfg()
 				{
