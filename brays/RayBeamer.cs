@@ -1042,7 +1042,7 @@ namespace brays
 			try
 			{
 				// [i] A dedicated thread with Sleep() seems cheaper
-				// than continuous Task creation with Delay(),
+				// than continuous Task creation with Delay().
 
 				while (Volatile.Read(ref stop) < 1)
 				{
