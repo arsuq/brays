@@ -5,7 +5,7 @@ namespace brays
 	public class LogCfg
 	{
 		public LogCfg(
-			string filePath, bool enabled, TraceOps trace = (TraceOps)2047,
+			string filePath, bool enabled, TraceOps trace = (TraceOps)((1 << 14) - 1),
 			string ext = "brays", int rotSizeKb = 500)
 		{
 			LogFilePath = filePath;

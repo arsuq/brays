@@ -12,7 +12,7 @@ namespace brays
 		Status,
 		Cfg,
 		Tile,
-		Pack
+		Pulse
 	}
 
 	public enum SignalKind : int
@@ -35,7 +35,7 @@ namespace brays
 	{
 		None = 0,
 		Tile = 1,
-		Pack = 1 << 2,
+		AutoPulse = 1 << 2,
 		ReqTiles = 1 << 3,
 		Beam = 1 << 4,
 		Status = 1 << 5,
@@ -45,7 +45,7 @@ namespace brays
 		ProcStatus = 1 << 9,
 		ProcSignal = 1 << 10,
 		ProcTile = 1 << 11,
-		ProcPack = 1 << 12
+		ProcPulse = 1 << 12
 #if DEBUG
 		, DropFrame = 1 << 13,
 #endif

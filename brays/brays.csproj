@@ -3,6 +3,17 @@
   <PropertyGroup>
     <TargetFramework>netcoreapp2.2</TargetFramework>
     <LangVersion>7.3</LangVersion>
+    <Configurations>Debug;Release;Assert</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants></DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Assert|AnyCPU'">
+    <DefineConstants>DEBUG;TRACE;ASSERT</DefineConstants>
+    <Optimize>false</Optimize>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

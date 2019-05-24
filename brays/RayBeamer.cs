@@ -33,6 +33,7 @@ namespace brays
 				try
 				{
 					Interlocked.Exchange(ref stop, 1);
+					autoPulseThr?.Abort();
 					outHighway?.Dispose();
 					blockHighway?.Dispose();
 					tileXHigheay?.Dispose();
@@ -86,10 +87,10 @@ namespace brays
 
 					if (probingTask == null) probingTask = probe();
 					if (cleanupTask == null) cleanupTask = cleanup();
-					if (pulseAutoShootThr == null)
+					if (autoPulseThr == null)
 					{
-						pulseAutoShootThr = new Thread(() => autoPulse());
-						pulseAutoShootThr.Start();
+						autoPulseThr = new Thread(() => autoPulse());
+						autoPulseThr.Start();
 					}
 
 					if (configExchange)
@@ -483,7 +484,7 @@ namespace brays
 
 						var sent = socket.Send(frag, SocketFlags.None);
 
-						if (sent == frag.Length) trace(TraceOps.Tile, fid, $"K: {(Lead)kind} #{i + 1}");
+						if (sent == frag.Length) trace(TraceOps.Tile, fid, $"K: {(Lead)kind} b:{sent} #{i + 1}");
 						else trace(TraceOps.Tile, fid, $"Failed K: {(Lead)kind}");
 
 						if (await rst.Wait(awaitMS)) break;
@@ -530,7 +531,7 @@ namespace brays
 			lock (packLock)
 			{
 				if (packTile == null) packTile = outHighway.Alloc(cfg.TileSizeBytes);
-				if (packTileOffset + USH_LEN + s.Length >= cfg.TileSizeBytes) packShootAndReload();
+				if (packTileOffset + USH_LEN + s.Length >= cfg.TileSizeBytes) pulseAndReload();
 
 				if (BitConverter.TryWriteBytes(packTile.Span().Slice(packTileOffset), (ushort)s.Length))
 				{
@@ -540,17 +541,15 @@ namespace brays
 
 					return packResultRst;
 				}
-				else throw new Exception("WTF");
+				else throw new Exception("Pack length write.");
 			}
 		}
 
-		void packShootAndReload()
+		void pulseAndReload()
 		{
 			lock (packLock)
 			{
 				if (packTileOffset == 0) return;
-
-				var ll = BitConverter.ToUInt16(packTile);
 
 				reloadCopyRst.Reset();
 
@@ -560,12 +559,16 @@ namespace brays
 
 					try
 					{
-						mark = await tilex((byte)Lead.Pack, packTile, reloadCopyRst, 0, x.len)
+#if ASSERT
+						if (!ASSERT_packTile()) throw new Exception("Corrupt pulse tile.");
+#endif
+
+						mark = await tilex((byte)Lead.Pulse, packTile, reloadCopyRst, 0, x.len)
 							.ConfigureAwait(false);
 					}
 					catch (AggregateException aex)
 					{
-						trace("Ex", "Pack-TileX", aex.Flatten().ToString());
+						trace("Ex", "Pulse-TileX", aex.Flatten().ToString());
 					}
 					finally
 					{
@@ -575,17 +578,40 @@ namespace brays
 
 				// Reload
 				reloadCopyRst.Wait();
-
-				if (ll != BitConverter.ToUInt16(packTile))
-				{
-				}
-
 				packTile.Dispose();
 				packTile = outHighway.Alloc(cfg.TileSizeBytes);
-				autoPulseRst = new ManualResetEventSlim(false);
+				packTile.Span().Clear();
 				packTileOffset = 0;
 			}
 		}
+
+#if ASSERT
+
+		bool ASSERT_packTile()
+		{
+			var pos = 0;
+			var len = -1;
+			var lim = 0;
+			var s = packTile.Span();
+
+			while (pos + 2 < s.Length)
+			{
+				len = BitConverter.ToUInt16(s.Slice(pos));
+
+				if (len == 0) break;
+
+				pos += 2;
+				lim = pos + len - 1;
+				var b = s[pos];
+
+				for (; pos <= lim; pos++)
+					if (b != s[pos]) return false;
+			}
+
+			return true;
+		}
+
+#endif
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		bool isClone(TraceOps op, int frameID, bool signalWithLastReply = true)
@@ -636,7 +662,7 @@ namespace brays
 					case Lead.Status: procStatus(f); break;
 					case Lead.Tile: procTileX(f); break;
 					case Lead.Cfg: procCfgX(f); break;
-					case Lead.Pack: procPack(f); break;
+					case Lead.Pulse: procPulse(f); break;
 					default:
 					{
 						trace("ProcFrame", $"Unknown lead: {(byte)lead}");
@@ -692,37 +718,51 @@ namespace brays
 			else onReceived(xf);
 		}
 
-		void procPack(MemoryFragment frag)
+		void procPulse(MemoryFragment frag)
 		{
 			var f = new TILEX(frag.Span());
+
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				trace(TraceOps.DropFrame, f.FrameID, "Pack");
+				trace(TraceOps.DropFrame, f.FrameID, "ProcPulse");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.ProcPack, f.FrameID)) return;
+			if (isClone(TraceOps.ProcPulse, f.FrameID)) return;
 
 			signal(f.FrameID, (int)SignalKind.ACK);
+			trace(TraceOps.ProcPulse, f.FrameID, $"Len: {f.Data.Length}");
 
 			try
 			{
 				int pos = 0;
 
-				while (pos < f.Length)
+				while (pos + 2 < f.Length)
 				{
 					var len = BitConverter.ToUInt16(f.Data.Slice(pos));
+
+					if (len == 0) break;
+
 					var pfr = tileXHigheay.AllocFragment(len);
+					var data = f.Data.Slice(pos + USH_LEN, len);
 
-					f.Data.Slice(pos + USH_LEN, len).CopyTo(pfr);
-
+					pfr.Span().Clear();
+					data.CopyTo(pfr);
 					pos += len + USH_LEN;
 
 					ThreadPool.QueueUserWorkItem((x) =>
 					{
-						try { onReceived(x); }
-						catch { }
+						try
+						{
+							onReceived(x);
+						}
+						catch (MemoryLaneException mlx)
+						{
+						}
+						catch (Exception ex)
+						{
+						}
 					}, pfr, true);
 				}
 			}
@@ -1046,24 +1086,26 @@ namespace brays
 
 				while (Volatile.Read(ref stop) < 1)
 				{
+					autoPulseRst.Reset();
 					autoPulseRst.Wait();
-					Thread.Sleep(100);
+					Thread.Sleep(cfg.PulseSleepMS);
 
 					if (Monitor.TryEnter(packLock, 0))
 						try
 						{
-							packShootAndReload();
+							trace(TraceOps.AutoPulse, 0, $"Len: {packTileOffset}");
+							pulseAndReload();
 						}
 						finally
 						{
 							Monitor.Exit(packLock);
-							autoPulseRst.Reset();
 						}
+
 				}
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", "PackAutoShoot", ex.ToString());
+				trace("Ex", "AutoPulse", ex.ToString());
 			}
 		}
 
@@ -1079,6 +1121,7 @@ namespace brays
 					case TraceOps.Status:
 					case TraceOps.Signal:
 					case TraceOps.Tile:
+					case TraceOps.AutoPulse:
 					ttl = string.Format("{0,10}:o {1, -12} {2}", frame, op, title);
 					break;
 					case TraceOps.ReqTiles:
@@ -1089,6 +1132,7 @@ namespace brays
 					case TraceOps.ProcStatus:
 					case TraceOps.ProcSignal:
 					case TraceOps.ProcTile:
+					case TraceOps.ProcPulse:
 					ttl = string.Format("{0,10}:i {1, -12} {2}", frame, op, title);
 					break;
 #if DEBUG
@@ -1153,7 +1197,7 @@ namespace brays
 		Task probingTask;
 		Task cleanupTask;
 		Task[] receivers;
-		Thread pulseAutoShootThr;
+		Thread autoPulseThr;
 		CfgX targetCfg;
 
 		// All keys are frame or block IDs

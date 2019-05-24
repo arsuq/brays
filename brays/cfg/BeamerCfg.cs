@@ -15,19 +15,10 @@ namespace brays
 			Log = logcfg;
 		}
 
-		#region TSR
-
-		public int SendQueueBlockingIndex;
-
-		public int PackSleepMS;
-		public int SendSleepMS;
-
-		#endregion
-
-
-
-
-
+		/// <summary>
+		/// The max pulse delay.
+		/// </summary>
+		public int PulseSleepMS = 0;
 
 		/// <summary>
 		/// The await for the remote config when exchanging.

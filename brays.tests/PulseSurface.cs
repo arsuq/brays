@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,7 +8,7 @@ using TestSurface;
 
 namespace brays.tests
 {
-	class PackSurface : ITestSurface
+	class PulseSurface : ITestSurface
 	{
 		public string Info => "Test the RayEmitter small data packing into dgrams.";
 		public string FailureMessage { get; private set; }
@@ -27,24 +28,26 @@ namespace brays.tests
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 
 				const int BYTES_TO_TRANSFER = 10_000_000;
-				const int MAX_RANDOM_SIZE = 500;
+				const int MAX_RANDOM_SIZE = 1000;
 				int totalSent = 0;
 				int totalReceived = 0;
 
 				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
-					new BeamerCfg() { Log = new LogCfg("rayA", true) });
+					new BeamerCfg() { Log = new LogCfg("rayA", false) });
 
 				rayB = new RayBeamer((f) =>
 				{
 					try
 					{
-						if (f.Length < 1) return;
+						if (f == null || f.IsDisposed || f.Length < 1)
+							throw new Exception("Frag");
 
-						var v = f[0];
+						var fs = f.Span();
+						var v = fs[0];
 
-						for (int i = 1; i < f.Length; i++)
-							if (v != f[i] || f[i] == 0)
+						for (int i = 1; i < fs.Length; i++)
+							if (v != fs[i] || fs[i] == 0)
 							{
 								FailureMessage = "Received wrong data";
 								Passed = false;
@@ -52,6 +55,9 @@ namespace brays.tests
 							}
 
 						var tr = Interlocked.Add(ref totalReceived, f.Length);
+
+						//$"TR: {tr}".AsInfo();
+
 						if (tr >= BYTES_TO_TRANSFER)
 							done.Set();
 					}
@@ -59,9 +65,12 @@ namespace brays.tests
 					{
 						ex.ToString().AsError();
 					}
-					finally { if (f != null) f.Dispose(); }
+					finally
+					{
+						if (f != null) f.Dispose();
+					}
 
-				}, new BeamerCfg() { Log = new LogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new LogCfg("rayB", false) });
 
 				using (var hw = new HeapHighway())
 				{
@@ -75,6 +84,8 @@ namespace brays.tests
 						while (true)
 							try
 							{
+								if (done.Task.Status == TaskStatus.RanToCompletion) return;
+
 								using (var f = hw.Alloc(rdm.Next(1, MAX_RANDOM_SIZE)))
 								{
 									var v = (byte)rdm.Next(1, 255);
@@ -83,11 +94,18 @@ namespace brays.tests
 										f[j] = v;
 
 									rayA.Pulse(f);
-									if (Interlocked.Add(ref totalSent, f.Length) >= BYTES_TO_TRANSFER)
+									var ts = Interlocked.Add(ref totalSent, f.Length);
+
+									//	$"TS: {ts}".AsInfo();
+
+									if (ts >= BYTES_TO_TRANSFER)
 										break;
 								}
 							}
-							catch { }
+							catch (Exception ex)
+							{
+
+							}
 					});
 
 					var tb = new Task(() =>
