@@ -390,7 +390,7 @@ namespace brays
 						if (blocks.TryGetValue(blockID, out Block b) && tileMap != null)
 							map = $"M: {b.tileMap.ToString()} ";
 
-						for (int i = 0; i < cfg.SendRetries; i++)
+						for (int i = 0; i < cfg.SendRetries && Volatile.Read(ref stop) < 1; i++)
 						{
 							if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
@@ -444,7 +444,7 @@ namespace brays
 			int fid = 0,
 			Action<MemoryFragment> onTileXAwait = null)
 		{
-			// [!] The data could be null if CfgX request.
+			// [i] The data could be null if CfgX request.
 
 			var dataLen = data != null ? data.Length : 0;
 
@@ -479,7 +479,7 @@ namespace brays
 
 					var awaitMS = cfg.RetryDelayStartMS;
 
-					for (int i = 0; i < cfg.SendRetries; i++)
+					for (int i = 0; i < cfg.SendRetries && Volatile.Read(ref stop) < 1; i++)
 					{
 						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
@@ -649,6 +649,7 @@ namespace brays
 			try
 			{
 				Volatile.Write(ref lastReceivedDgramTick, DateTime.Now.Ticks);
+
 				var lead = (Lead)f.Span()[0];
 
 				switch (lead)
@@ -1105,7 +1106,7 @@ namespace brays
 			}
 		}
 
-		void trace(TraceOps op, int frame, string title, string msg = null)
+		internal void trace(TraceOps op, int frame, string title, string msg = null)
 		{
 			// [i] Unfortunately trace will not be inlined and the cost of passing
 			// args in disabled ops is payed everywhere,
@@ -1153,7 +1154,7 @@ namespace brays
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void trace(string op, string title, string msg = null)
+		internal void trace(string op, string title, string msg = null)
 		{
 			if (log != null && Volatile.Read(ref cfg.Log.Enabled))
 			{

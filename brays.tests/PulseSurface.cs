@@ -18,6 +18,12 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
+			//await WithCheck();
+			await NoCheck();
+		}
+
+		async Task WithCheck()
+		{
 			RayBeamer rayA = null;
 			RayBeamer rayB = null;
 
@@ -136,5 +142,104 @@ namespace brays.tests
 				rayB.Dispose();
 			}
 		}
+
+		async Task NoCheck()
+		{
+			RayBeamer rayA = null;
+			RayBeamer rayB = null;
+
+			try
+			{
+				var done = new ResetEvent(false);
+				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
+				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+
+				const int BYTES_TO_TRANSFER = 100_000_000;
+				const int MAX_RANDOM_SIZE = 1000;
+				int totalSent = 0;
+				int totalReceived = 0;
+
+				rayA = new RayBeamer((f) => { }, new BeamerCfg() { Log = new LogCfg("rayA", true) });
+
+				rayB = new RayBeamer((f) =>
+				{
+					try
+					{
+						if (f == null || f.IsDisposed || f.Length < 1)
+							throw new Exception("Frag");
+
+						var tr = Interlocked.Add(ref totalReceived, f.Length);
+						if (tr >= BYTES_TO_TRANSFER)
+							done.Set();
+					}
+					catch (Exception ex)
+					{
+						ex.ToString().AsError();
+					}
+					finally
+					{
+						if (f != null) f.Dispose();
+					}
+
+				}, new BeamerCfg() { Log = new LogCfg("rayB", true) });
+
+				var hw = new HeapHighway();
+				var ta = new Task(async () =>
+				{
+					await Task.Delay(0);
+
+					rayA.LockOn(aep, bep).Wait();
+					var rdm = new Random();
+
+					while (true)
+						try
+						{
+							if (done.Task.Status == TaskStatus.RanToCompletion) return;
+
+							using (var f = hw.Alloc(rdm.Next(1, MAX_RANDOM_SIZE)))
+							{
+								rayA.Pulse(f);
+								var ts = Interlocked.Add(ref totalSent, f.Length);
+								if (ts >= BYTES_TO_TRANSFER)
+									break;
+							}
+						}
+						catch (Exception ex)
+						{
+							ex.Message.AsError();
+						}
+
+					rayA.trace("Out of pulsing", null);
+				});
+
+				var tb = new Task(() =>
+				{
+					rayB.LockOn(bep, aep).Wait();
+				});
+
+				ta.Start();
+				tb.Start();
+
+				if (await done.Wait())
+				{
+					Passed = true;
+					IsComplete = true;
+				}
+
+				Passed = true;
+				IsComplete = true;
+			}
+			catch (Exception ex)
+			{
+				FailureMessage = ex.Message;
+				Passed = false;
+			}
+			finally
+			{
+				rayA.Dispose();
+				rayB.Dispose();
+			}
+		}
+
 	}
 }

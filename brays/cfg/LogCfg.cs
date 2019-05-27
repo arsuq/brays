@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace brays
 {
@@ -14,6 +15,9 @@ namespace brays
 			RotationLogFileKB = rotSizeKb;
 			Flags = trace;
 		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool IsOn(TraceOps op) => (op & Flags) == op && Enabled;
 
 		/// <summary>
 		/// If not null will be invoked on each trace.

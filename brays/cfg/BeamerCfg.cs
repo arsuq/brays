@@ -18,7 +18,7 @@ namespace brays
 		/// <summary>
 		/// The max pulse delay.
 		/// </summary>
-		public int PulseSleepMS = 0;
+		public int PulseSleepMS = 20;
 
 		/// <summary>
 		/// The await for the remote config when exchanging.
@@ -85,7 +85,7 @@ namespace brays
 		/// <summary>
 		/// The SendRetries loop await. 
 		/// </summary>
-		public int RetryDelayStartMS = 100;
+		public int RetryDelayStartMS = 140;
 
 		/// <summary>
 		/// After each retry the RetryDelayStartMS is multiplied by this value.
