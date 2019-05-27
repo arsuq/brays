@@ -95,9 +95,6 @@ namespace brays.tests
 
 									rayA.Pulse(f);
 									var ts = Interlocked.Add(ref totalSent, f.Length);
-
-									//	$"TS: {ts}".AsInfo();
-
 									if (ts >= BYTES_TO_TRANSFER)
 										break;
 								}

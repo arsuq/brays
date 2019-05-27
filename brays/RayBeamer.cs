@@ -112,7 +112,7 @@ namespace brays
 				catch (Exception ex)
 				{
 					if (!lockOnRst.IsSet) lockOnRst.Set();
-					log.Write($"Ex LockOn {ex.Message}", ex.ToString());
+					trace("Ex", "LockOn", ex.ToString());
 				}
 				finally
 				{
@@ -472,7 +472,8 @@ namespace brays
 				{
 					if (dataLen > 0)
 						TILEX.Make(kind, fid, refid, (ushort)dataLen, data.Span().Slice(dfrom, dLen), frag);
-					else TILEX.Make(kind, fid, refid, 0, default, frag);
+					else
+						TILEX.Make(kind, fid, refid, 0, default, frag);
 
 					if (crst != null) crst.Set();
 
@@ -562,7 +563,6 @@ namespace brays
 #if ASSERT
 						if (!ASSERT_packTile()) throw new Exception("Corrupt pulse tile.");
 #endif
-
 						mark = await tilex((byte)Lead.Pulse, packTile, reloadCopyRst, 0, x.len)
 							.ConfigureAwait(false);
 					}
@@ -613,7 +613,6 @@ namespace brays
 
 #endif
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		bool isClone(TraceOps op, int frameID, bool signalWithLastReply = true)
 		{
 			if (!procFrames.TryAdd(frameID, DateTime.Now))
@@ -645,12 +644,11 @@ namespace brays
 			}
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void procFrame(MemoryFragment f, bool isPack = false)
+		void procFrame(MemoryFragment f)
 		{
 			try
 			{
-				if (!isPack) Volatile.Write(ref lastReceivedDgramTick, DateTime.Now.Ticks);
+				Volatile.Write(ref lastReceivedDgramTick, DateTime.Now.Ticks);
 				var lead = (Lead)f.Span()[0];
 
 				switch (lead)
@@ -982,7 +980,7 @@ namespace brays
 							Interlocked.Increment(ref receivedDgrams);
 
 							if (read == 1) procFrame(frag);
-							new Task((mf) => procFrame((MemoryFragment)mf), frag).Start();
+							else ThreadPool.QueueUserWorkItem((f) => procFrame(f), frag, true);
 
 							if (Volatile.Read(ref retries) > 0) Volatile.Write(ref retries, 0);
 						}
@@ -1012,8 +1010,6 @@ namespace brays
 				try
 				{
 					trace("Cleanup", $"Blocks: {blocks.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
-
-					tileXHigheay.FreeGhosts();
 
 					foreach (var b in blocks.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
@@ -1109,9 +1105,13 @@ namespace brays
 			}
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void trace(TraceOps op, int frame, string title, string msg = null)
 		{
+			// [i] Unfortunately trace will not be inlined and the cost of passing
+			// args in disabled ops is payed everywhere,
+			// Alternatively, the flags bitwise check can be moved outside the 
+			// call, saving a lot of waste cycles.
+
 			if (log != null && Volatile.Read(ref cfg.Log.Enabled) && (op & cfg.Log.Flags) == op)
 			{
 				string ttl = string.Empty;

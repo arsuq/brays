@@ -10,7 +10,7 @@ namespace brays
 			TileExchangeHighway = tileXHighway != null ?
 				tileXHighway :
 				new HeapHighway(
-					new HighwaySettings(ushort.MaxValue, 1000, MemoryLaneResetMode.TrackGhosts),
+					new HighwaySettings(ushort.MaxValue, 1000),
 					ushort.MaxValue, ushort.MaxValue, ushort.MaxValue);
 			Log = logcfg;
 		}
