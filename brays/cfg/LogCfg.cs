@@ -10,14 +10,14 @@ namespace brays
 			string ext = "brays", int rotSizeKb = 500)
 		{
 			LogFilePath = filePath;
-			Enabled = enabled;
+			IsEnabled = enabled;
 			Ext = ext;
 			RotationLogFileKB = rotSizeKb;
 			Flags = trace;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool IsOn(TraceOps op) => (op & Flags) == op && Enabled;
+		public bool IsOn(TraceOps op) => (op & Flags) == op && IsEnabled;
 
 		/// <summary>
 		/// If not null will be invoked on each trace.
@@ -37,7 +37,7 @@ namespace brays
 		/// <summary>
 		/// Enables the tracer.
 		/// </summary>
-		public bool Enabled;
+		public bool IsEnabled;
 
 		/// <summary>
 		/// The max log file size in KB.
