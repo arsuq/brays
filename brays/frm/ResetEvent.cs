@@ -59,7 +59,7 @@ namespace brays
 					else tcso.TrySetResult(-1);
 				}, tcs);
 
-			return Task;
+			return Volatile.Read(ref tcs).Task;
 		}
 
 		/// <summary>

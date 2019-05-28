@@ -18,9 +18,15 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
-			//autoReset();
-			//noReset();
+			autoReset();
+			noReset();
 			autoResetCompetition();
+
+			if (!Passed.HasValue)
+			{
+				Passed = true;
+				IsComplete = true;
+			}
 		}
 
 		void autoReset()
@@ -35,7 +41,7 @@ namespace brays.tests
 			}, rst, true);
 
 			retries.Wait();
-			$"autoReset retries: {retries.Result} [Expect > 0]".AsInfo();
+			$"autoReset retries: {retries.Result.r} [Expect > 0]".AsInfo();
 		}
 
 		void noReset()
@@ -50,7 +56,7 @@ namespace brays.tests
 			}, rst, true);
 
 			retries.Wait();
-			$"noReset retries: {retries.Result} [Expect 0]".AsInfo();
+			$"noReset retries: {retries.Result.r} [Expect 0]".AsInfo();
 		}
 
 		void autoResetCompetition()
@@ -58,26 +64,12 @@ namespace brays.tests
 			var rst = new ResetEvent();
 			var retries = retry(rst, 10);
 
-			for (int i = 0; i < 20; i++)
-				ThreadPool.QueueUserWorkItem((r) =>
-				{
-					Thread.Sleep(10000);
-					r.Set(64);
-				}, rst, true);
-
-			for (int i = 0; i < 20; i++)
-				ThreadPool.QueueUserWorkItem((r) =>
-				{
-					Thread.Sleep(10000);
-					r.Set(32);
-				}, rst, true);
-
-			for (int i = 0; i < 20; i++)
-				ThreadPool.QueueUserWorkItem((r) =>
-				{
-					Thread.Sleep(10000);
-					r.Set(16);
-				}, rst, true);
+			for (int i = 0; i < 10; i++)
+			{
+				Task.Delay(4000).ContinueWith((x) => rst.Set(64));
+				Task.Delay(4000).ContinueWith((x) => rst.Set(32));
+				Task.Delay(4000).ContinueWith((x) => rst.Set(16));
+			}
 
 			var rs = retries.Result.s;
 
@@ -85,7 +77,7 @@ namespace brays.tests
 			{
 				Passed = false;
 				FailureMessage = $"autoResetCompetition fails with mutated state: {rs}";
-			} 
+			}
 			else $"autoReset retries: {retries.Result.r} reset value: {rs}".AsInfo();
 		}
 
