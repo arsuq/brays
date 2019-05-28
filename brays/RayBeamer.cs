@@ -986,6 +986,8 @@ namespace brays
 
 		async Task probe()
 		{
+			await Task.Yield();
+
 			if (cfg.EnableProbes)
 				while (Volatile.Read(ref stop) < 1 && Volatile.Read(ref cfg.EnableProbes))
 					try
@@ -998,6 +1000,8 @@ namespace brays
 
 		async Task receive()
 		{
+			await Task.Yield();
+
 			using (var inHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX))
 				while (Volatile.Read(ref stop) < 1)
 					try
@@ -1035,6 +1039,8 @@ namespace brays
 
 		async Task cleanup()
 		{
+			await Task.Yield();
+
 			while (true)
 			{
 				var DTN = DateTime.Now;
@@ -1077,6 +1083,8 @@ namespace brays
 
 		async Task reqMissingTiles(Block b)
 		{
+			await Task.Yield();
+
 			try
 			{
 				int c = 0;
@@ -1108,7 +1116,7 @@ namespace brays
 
 		async Task autoPulse()
 		{
-			await Task.Delay(100);
+			await Task.Yield();
 
 			try
 			{
