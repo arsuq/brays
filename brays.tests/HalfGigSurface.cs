@@ -60,6 +60,10 @@ namespace brays.tests
 						if (s.Length == len) rec = Interlocked.Add(ref totalReceived, len);
 						else err = true;
 					}
+					catch (Exception ex)
+					{
+						ex.ToString().AsError();
+					}
 					finally
 					{
 						f.Dispose();

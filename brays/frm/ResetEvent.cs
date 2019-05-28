@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace brays
 {
 	/// <summary>
-	/// Use it like an await-able AutoResetEvent.
+	/// An await-able ManualResetEvent.
 	/// </summary>
 	public class ResetEvent
 	{
@@ -40,26 +40,32 @@ namespace brays
 		/// <summary>
 		/// Waits for either a Set() call or a timeout.
 		/// </summary>
-		/// <param name="timeout">The timespan before Set(false).</param>
+		/// <param name="timeout">The timespan before Set(-1).</param>
 		/// <returns>The Set() value or -1 if timeouts.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Task<int> Wait(TimeSpan timeout, bool autoreset = true)
 		{
+			// [!] Must use the same tcs instance for waiting and in the Timeout callback.
+			var tcsr = Volatile.Read(ref tcs);
+
 			if (timeout != Timeout.InfiniteTimeSpan)
 				System.Threading.Tasks.Task.Delay(timeout).ContinueWith((t, o) =>
 				{
 					// [!] Work only with the original TCS
 					var tcso = o as TaskCompletionSource<int>;
 
-					if (autoreset && IsAutoResetAllowed)
+					// If not completed - reload another TCS.
+					if (tcso.Task.Status != TaskStatus.RanToCompletion)
 					{
-						var otcs = Interlocked.CompareExchange(ref tcs, new TaskCompletionSource<int>(), tcso);
-						if (otcs == tcso) otcs.TrySetResult(-1);
-					}
-					else tcso.TrySetResult(-1);
-				}, tcs);
+						if (autoreset && IsAutoResetAllowed)
+							Interlocked.CompareExchange(ref tcs, new TaskCompletionSource<int>(), tcso);
 
-			return Volatile.Read(ref tcs).Task;
+						tcso.TrySetResult(-1);
+					}
+
+				}, tcsr);
+
+			return tcsr.Task;
 		}
 
 		/// <summary>
@@ -72,9 +78,8 @@ namespace brays
 		{
 			if (autoreset && IsAutoResetAllowed)
 			{
-				var otcs = Interlocked.Exchange(ref tcs, new TaskCompletionSource<int>());
-				otcs.TrySetResult(state);
-
+				var o = Interlocked.Exchange(ref tcs, new TaskCompletionSource<int>());
+				o.TrySetResult(state);
 			}
 			else Volatile.Read(ref tcs).TrySetResult(state);
 		}
@@ -90,7 +95,7 @@ namespace brays
 		/// <summary>
 		/// Creates a new TaskCompletionSource to await.
 		/// </summary>
-		/// <param name="setPrevState">A state to try resolving the previous task with.</param>
+		/// <param name="setPrevState">A state to resolve the previous task with, if not completed.</param>
 		public void Reset(int? setPrevState)
 		{
 			var otcs = Interlocked.Exchange(ref tcs, new TaskCompletionSource<int>());

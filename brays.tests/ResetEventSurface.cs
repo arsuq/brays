@@ -16,7 +16,7 @@ namespace brays.tests
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => true;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public Task Run(IDictionary<string, List<string>> args)
 		{
 			autoReset();
 			noReset();
@@ -27,6 +27,8 @@ namespace brays.tests
 				Passed = true;
 				IsComplete = true;
 			}
+
+			return Task.CompletedTask;
 		}
 
 		void autoReset()

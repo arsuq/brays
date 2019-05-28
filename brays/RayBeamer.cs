@@ -35,7 +35,6 @@ namespace brays
 				try
 				{
 					Interlocked.Exchange(ref stop, 1);
-					autoPulseThr?.Abort();
 					outHighway?.Dispose();
 					blockHighway?.Dispose();
 					tileXHigheay?.Dispose();
@@ -49,7 +48,9 @@ namespace brays
 						foreach (var b in blocks.Values)
 							if (b != null) b.Dispose();
 				}
-				catch { }
+				catch (Exception ex)
+				{
+				}
 				finally
 				{
 					isDisposed = true;
@@ -89,11 +90,7 @@ namespace brays
 
 					if (probingTask == null) probingTask = probe();
 					if (cleanupTask == null) cleanupTask = cleanup();
-					if (autoPulseThr == null)
-					{
-						autoPulseThr = new Thread(() => autoPulse());
-						autoPulseThr.Start();
-					}
+					if (autoPulseTask == null) autoPulseTask = autoPulse();
 
 					if (configExchange)
 					{
@@ -1109,20 +1106,19 @@ namespace brays
 			}
 		}
 
-		void autoPulse()
+		async Task autoPulse()
 		{
+			await Task.Delay(100);
+
 			try
 			{
-				// [i] A dedicated thread with Sleep() seems cheaper
-				// than continuous Task creation with Delay().
-
 				var logop = (TraceOps.AutoPulse & cfg.Log.Flags) == TraceOps.AutoPulse && cfg.Log.IsEnabled;
 
 				while (Volatile.Read(ref stop) < 1)
 				{
 					autoPulseRst.Reset();
 					autoPulseRst.Wait();
-					Thread.Sleep(cfg.PulseSleepMS);
+					await Task.Delay(cfg.PulseSleepMS);
 
 					if (Monitor.TryEnter(packLock, 0))
 						try
@@ -1134,7 +1130,6 @@ namespace brays
 						{
 							Monitor.Exit(packLock);
 						}
-
 				}
 			}
 			catch (Exception ex)
@@ -1227,7 +1222,7 @@ namespace brays
 		Task probingTask;
 		Task cleanupTask;
 		Task[] receivers;
-		Thread autoPulseThr;
+		Task autoPulseTask;
 		CfgX targetCfg;
 
 		// All keys are frame or block IDs
