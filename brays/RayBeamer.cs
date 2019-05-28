@@ -153,7 +153,7 @@ namespace brays
 
 					if (mark != (int)SignalKind.ACK) return false;
 
-					return await rst.Wait(cfg.ConfigExchangeTimeout).ConfigureAwait(false);
+					return await rst.Wait(cfg.ConfigExchangeTimeout).ConfigureAwait(false) > 0;
 				}
 				else return await tilex((byte)Lead.Cfg, sf, null, 0, 0, refID, fid)
 						.ConfigureAwait(false) == (int)SignalKind.ACK;
@@ -403,7 +403,7 @@ namespace brays
 								if (sent == 0) trace(TraceOps.Status, fid, $"Socket sent 0 bytes. B: {blockID} #{i + 1}");
 								else trace(TraceOps.Status, fid, $"B: {blockID} {map} #{i + 1}");
 
-							if (!awaitRsp || await rst.Wait(awaitMS)) break;
+							if (!awaitRsp || await rst.Wait(awaitMS) > 0) break;
 							awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
 						}
 					}
@@ -495,7 +495,7 @@ namespace brays
 							if (sent == frag.Length) trace(TraceOps.Tile, fid, $"K: {(Lead)kind} b:{sent} #{i + 1}");
 							else trace(TraceOps.Tile, fid, $"Failed K: {(Lead)kind}");
 
-						if (await rst.Wait(awaitMS)) break;
+						if (await rst.Wait(awaitMS) > 0) break;
 						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
 					}
 				}

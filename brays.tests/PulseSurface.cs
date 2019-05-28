@@ -119,7 +119,7 @@ namespace brays.tests
 					ta.Start();
 					tb.Start();
 
-					if (await done.Wait())
+					if (await done.Wait() > 0)
 					{
 						Passed = true;
 						IsComplete = true;
@@ -220,7 +220,7 @@ namespace brays.tests
 				ta.Start();
 				tb.Start();
 
-				if (await done.Wait())
+				if (await done.Wait() > 0)
 				{
 					Passed = true;
 					IsComplete = true;
