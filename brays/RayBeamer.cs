@@ -100,8 +100,15 @@ namespace brays
 							return false;
 						}
 
-						// 2d0: settings update
+						if (targetCfg.TileSizeBytes < cfg.TileSizeBytes)
+							cfg.TileSizeBytes = targetCfg.TileSizeBytes;
+
+						var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
+						if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
 					}
+
+					if (ccBeams != null) ccBeams.Dispose();
+					ccBeams = new SemaphoreSlim(cfg.MaxBeamedTilesAtOnce, cfg.MaxBeamedTilesAtOnce);
 
 					Volatile.Write(ref isLocked, true);
 
@@ -211,10 +218,6 @@ namespace brays
 			// the MemoryFragment bits are mutated. Consequently the block should
 			// never be shared outside brays as it's not safe to read while sending.
 
-#if DEBUG
-			if (Interlocked.Increment(ref ccBeamsFuse) > 1)
-				throw new InvariantException($"ccBeamsFuse: {ccBeamsFuse}");
-#endif
 			int sent = 0;
 
 			for (int i = 0; i < b.tileMap.Count; i++)
@@ -233,15 +236,8 @@ namespace brays
 						// Wait if the socket is reconfiguring.
 						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
-						var cc = Volatile.Read(ref ccBeams);
+						await ccBeams.WaitAsync();
 
-						while (cc > cfg.MaxBeamedTilesAtOnce)
-						{
-							cc = Volatile.Read(ref ccBeams);
-							Thread.Sleep(10);
-						}
-
-						Interlocked.Increment(ref ccBeams);
 						var fid = Interlocked.Increment(ref frameCounter);
 						var sentBytes = 0;
 
@@ -307,10 +303,7 @@ namespace brays
 						if (i > 0) b.frameHeader.AsSpan().CopyTo(
 							b.Fragment.Span().Slice(leftpos, FRAME.HEADER));
 
-						Interlocked.Decrement(ref ccBeams);
-#if DEBUG
-						Interlocked.Decrement(ref ccBeamsFuse);
-#endif
+						ccBeams.Release();
 					}
 				}
 
@@ -320,6 +313,8 @@ namespace brays
 
 		async Task<bool> beamLoop(Block b)
 		{
+			await Task.Yield();
+
 			try
 			{
 				for (int i = 0; i < cfg.TotalReBeamsCount; i++)
@@ -327,10 +322,14 @@ namespace brays
 					{
 						if (Interlocked.CompareExchange(ref b.isRebeamRequestPending, 0, 1) == 1)
 							Volatile.Write(ref b.beamTiles, beamLoop(b));
-						else Volatile.Write(ref b.beamTiles, null);
+						else
+							Volatile.Write(ref b.beamTiles, null);
+
 						return true;
 					}
 					else await Task.Delay(cfg.BeamAwaitMS).ConfigureAwait(false);
+
+				b.Dispose();
 			}
 			catch (AggregateException aex)
 			{
@@ -528,7 +527,6 @@ namespace brays
 			}
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		ResetEvent pack(Span<byte> s)
 		{
 			if (s.Length + USH_LEN > cfg.TileSizeBytes) throw new ArgumentException("Data length");
@@ -849,17 +847,15 @@ namespace brays
 
 			if (b.IsComplete && onReceived != null &&
 				Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
-				ThreadPool.QueueUserWorkItem((x) =>
+				ThreadPool.QueueUserWorkItem((block) =>
 				{
 					try
 					{
-						var block = x as Block;
-
 						if (logop) trace(TraceOps.ProcBlock, fid, $"B: {block.ID} completed.");
 						onReceived(block.Fragment);
 					}
 					catch { }
-				}, b);
+				}, b, false);
 
 		}
 
@@ -1209,11 +1205,6 @@ namespace brays
 		Socket socket;
 		Log log;
 
-#if DEBUG
-		int ccBeamsFuse;
-#endif
-		int ccBeams;
-
 		int frameCounter;
 		int blockCounter;
 		int receivedDgrams;
@@ -1225,6 +1216,7 @@ namespace brays
 		long lastReceivedDgramTick;
 		byte[] probeLead = new byte[] { (byte)Lead.Probe };
 
+		SemaphoreSlim ccBeams;
 		ManualResetEventSlim lockOnRst = new ManualResetEventSlim(true);
 		Gate lockOnGate = new Gate();
 		Task probingTask;

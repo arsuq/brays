@@ -4,13 +4,19 @@ namespace brays
 {
 	public class BeamerCfg
 	{
+		/// <summary>
+		/// Creates a RayBeamer configuration instance.
+		/// </summary>
+		/// <param name="receiveHighway">For the blocks, i.e. do not assume lengths.</param>
+		/// <param name="tileXHighway">For tile exchanges. Pass null to init with a heap hw with 65K lanes.</param>
+		/// <param name="logcfg">The logging settings.</param>
 		public BeamerCfg(IMemoryHighway receiveHighway = null, IMemoryHighway tileXHighway = null, LogCfg logcfg = null)
 		{
 			ReceiveHighway = receiveHighway != null ? receiveHighway : new HeapHighway();
 			TileExchangeHighway = tileXHighway != null ?
 				tileXHighway :
 				new HeapHighway(
-					new HighwaySettings(ushort.MaxValue, 1000),
+					new HighwaySettings(ushort.MaxValue, 10000),
 					ushort.MaxValue, ushort.MaxValue, ushort.MaxValue);
 			Log = logcfg;
 		}
@@ -26,9 +32,9 @@ namespace brays
 		public TimeSpan ConfigExchangeTimeout = new TimeSpan(0, 0, 30);
 
 		/// <summary>
-		/// The default value is ushort.MaxValue * 200
+		/// The default value is ushort.MaxValue * 400
 		/// </summary>
-		public int ReceiveBufferSize = ushort.MaxValue * 200;
+		public int ReceiveBufferSize = ushort.MaxValue * 400;
 
 		/// <summary>
 		/// The default value is ushort.MaxValue * 200
@@ -37,11 +43,14 @@ namespace brays
 
 		/// <summary>
 		/// Prevents dgram losses and re-beams.
+		/// This threshold affects only the block beams, where each tile is TileSizeBytes.
+		/// If the remote ReceiveBufferSize / remote.TileSizeBytes is less than this value
+		/// the smaller setting will be applied.
 		/// </summary>
-		public int MaxBeamedTilesAtOnce = 3;
+		public int MaxBeamedTilesAtOnce = 100;
 
 		/// <summary>
-		/// The concurrent socket listeners.
+		/// The concurrent socket listeners count.
 		/// </summary>
 		public int MaxConcurrentReceives = 4;
 
@@ -73,7 +82,7 @@ namespace brays
 		public int ErrorAwaitMS = 3000;
 
 		/// <summary>
-		/// After this number of receive retries the Beamer shuts down.
+		/// After this number of receive 0 bytes retries the Beamer shuts down.
 		/// </summary>
 		public int MaxReceiveRetries = 8;
 
@@ -83,7 +92,7 @@ namespace brays
 		public int SendRetries = 40;
 
 		/// <summary>
-		/// The SendRetries loop await. 
+		/// The SendRetries starting loop await in milliseconds. 
 		/// </summary>
 		public int RetryDelayStartMS = 100;
 
@@ -137,7 +146,7 @@ namespace brays
 		/// In practice the last few tiles of a block will arrive after the all-sent status signal,
 		/// so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
 		/// </remarks>
-		public int WaitAfterAllSentMS = 800;
+		public int WaitAfterAllSentMS = 1000;
 
 		/// <summary>
 		/// Where the blocks are assembled.

@@ -7,6 +7,7 @@ namespace brays
 	{
 		public CfgX(BeamerCfg cfg, IPEndPoint ep)
 		{
+			TileSizeBytes = cfg.TileSizeBytes;
 			MaxBeamedTilesAtOnce = cfg.MaxBeamedTilesAtOnce;
 			MaxConcurrentReceives = cfg.MaxConcurrentReceives;
 			SendBufferSize = cfg.SendBufferSize;
@@ -18,24 +19,26 @@ namespace brays
 
 		public CfgX(Span<byte> s)
 		{
-			MaxBeamedTilesAtOnce = BitConverter.ToInt32(s);
-			MaxConcurrentReceives = BitConverter.ToInt32(s.Slice(4));
-			SendBufferSize = BitConverter.ToInt32(s.Slice(8));
-			ReceiveBufferSize = BitConverter.ToInt32(s.Slice(12));
-			s.Slice(16, 16).CopyTo(IP);
-			Port = BitConverter.ToUInt16(s.Slice(32));
-			IsIPv4 = BitConverter.ToBoolean(s.Slice(34));
+			TileSizeBytes = BitConverter.ToUInt16(s);
+			MaxBeamedTilesAtOnce = BitConverter.ToInt32(s.Slice(2));
+			MaxConcurrentReceives = BitConverter.ToInt32(s.Slice(6));
+			SendBufferSize = BitConverter.ToInt32(s.Slice(10));
+			ReceiveBufferSize = BitConverter.ToInt32(s.Slice(14));
+			s.Slice(18, 16).CopyTo(IP);
+			Port = BitConverter.ToUInt16(s.Slice(34));
+			IsIPv4 = BitConverter.ToBoolean(s.Slice(36));
 		}
 
 		public void Write(Span<byte> s)
 		{
-			BitConverter.TryWriteBytes(s, MaxBeamedTilesAtOnce);
-			BitConverter.TryWriteBytes(s.Slice(4), MaxConcurrentReceives);
-			BitConverter.TryWriteBytes(s.Slice(8), SendBufferSize);
-			BitConverter.TryWriteBytes(s.Slice(12), ReceiveBufferSize);
-			IP.AsSpan().CopyTo(s.Slice(16));
-			BitConverter.TryWriteBytes(s.Slice(32), Port);
-			BitConverter.TryWriteBytes(s.Slice(34), IsIPv4);
+			BitConverter.TryWriteBytes(s, TileSizeBytes);
+			BitConverter.TryWriteBytes(s.Slice(2), MaxBeamedTilesAtOnce);
+			BitConverter.TryWriteBytes(s.Slice(6), MaxConcurrentReceives);
+			BitConverter.TryWriteBytes(s.Slice(10), SendBufferSize);
+			BitConverter.TryWriteBytes(s.Slice(14), ReceiveBufferSize);
+			IP.AsSpan().CopyTo(s.Slice(18));
+			BitConverter.TryWriteBytes(s.Slice(34), Port);
+			BitConverter.TryWriteBytes(s.Slice(36), IsIPv4);
 		}
 
 		public CfgX Clone()
@@ -45,8 +48,9 @@ namespace brays
 			return new CfgX(buff);
 		}
 
-		public const int LENGTH = 35;
+		public const int LENGTH = 37;
 
+		public ushort TileSizeBytes;
 		public int MaxBeamedTilesAtOnce;
 		public int MaxConcurrentReceives;
 		public int SendBufferSize;
