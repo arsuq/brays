@@ -82,7 +82,7 @@ namespace brays.tests
 				{
 					var ta = new Task(async () =>
 					{
-						await Task.Delay(0);
+						await Task.Yield();
 
 						rayA.LockOn(aep, bep).Wait();
 						var rdm = new Random();
@@ -126,7 +126,7 @@ namespace brays.tests
 					}
 				}
 
-				await Task.Delay(0);
+				await Task.Yield();
 
 				Passed = true;
 				IsComplete = true;
@@ -186,7 +186,7 @@ namespace brays.tests
 				var hw = new HeapHighway();
 				var ta = new Task(async () =>
 				{
-					await Task.Delay(0);
+					await Task.Yield();
 
 					rayA.LockOn(aep, bep).Wait();
 					var rdm = new Random();

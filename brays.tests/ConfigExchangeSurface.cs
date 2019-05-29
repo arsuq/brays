@@ -88,7 +88,7 @@ namespace brays.tests
 					FailureMessage.AsError();
 				}
 
-				await Task.Delay(0);
+				await Task.Yield();
 
 				if (Passed.HasValue && !Passed.Value) "configExchange() failed".AsError();
 				else

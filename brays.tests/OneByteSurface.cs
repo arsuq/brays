@@ -66,7 +66,7 @@ namespace brays.tests
 					rst.WaitOne();
 				}
 
-				await Task.Delay(0);
+				await Task.Yield();
 
 				Passed = true;
 				IsComplete = true;

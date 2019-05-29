@@ -1171,7 +1171,7 @@ namespace brays
 				break;
 #if DEBUG
 				case TraceOps.DropFrame:
-				ttl = string.Format("{0,10}:? {1, -12} {2}", frame, op, title);
+				ttl = string.Format("{0,10}:i {1, -12} {2}", frame, op, title);
 				break;
 #endif
 				case TraceOps.None:

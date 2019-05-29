@@ -143,7 +143,7 @@ namespace brays.tests
 					}
 				}
 
-				await Task.Delay(0);
+				await Task.Yield();
 
 				if (!Passed.HasValue) Passed = true;
 				IsComplete = true;

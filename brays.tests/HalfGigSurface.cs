@@ -139,7 +139,7 @@ namespace brays.tests
 					}
 				}
 
-				await Task.Delay(0);
+				await Task.Yield();
 
 				if (Passed.HasValue && !Passed.Value || !IsComplete) "halfGigNoLogNoVerify() failed".AsError();
 			}
