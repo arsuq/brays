@@ -24,7 +24,7 @@ namespace brays
 			tileXHigheay = cfg.TileExchangeHighway;
 
 			if (cfg.Log != null)
-				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB);
+				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB, cfg.Log.RotateLogAtStart);
 			else
 				cfg.Log = new LogCfg(null, false, 0);
 		}

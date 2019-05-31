@@ -16,6 +16,11 @@ namespace brays
 			Flags = trace;
 		}
 
+		/// <summary>
+		/// The beamer init will create a new log file. 
+		/// </summary>
+		public bool RotateLogAtStart = true;
+
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsOn(TraceOps op) => (op & Flags) == op && IsEnabled;
 

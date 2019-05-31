@@ -20,7 +20,7 @@ namespace System
 		/// <param name="filename">The log file name or full path without the extension.</param>
 		/// <param name="ext">The file extension, if any.</param>
 		/// <param name="maxSizeKb">The max file size before creating a new file.</param>
-		public Log(string filename, string ext, int maxSizeKb)
+		public Log(string filename, string ext, int maxSizeKb, bool forceNew = false)
 		{
 			Filename = filename;
 			Extension = string.IsNullOrEmpty(ext) ? "" : "." + ext;
@@ -30,6 +30,11 @@ namespace System
 			var lastLog = findLastLog();
 
 			if (lastLog == null) lastLog = $"{Filename}{Extension}";
+			else if (forceNew)
+			{
+				rotate(true);
+				return;
+			}
 
 			logStream = new FileStream(lastLog, FileMode.Append);
 			logFile = new FileInfo(lastLog);
@@ -47,8 +52,8 @@ namespace System
 			{
 				// Compute the time before the lock
 				var dt = UseUTC ? DateTime.UtcNow : DateTime.Now;
-				var time = string.Format("{0:0000}{1:00}{2:00}-{3:00}{4:00}{5:00}{6:000}",
-					dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second, dt.Millisecond);
+				var time = string.Format("{0:00}{1:00}{2:00}-{3:00}{4:00}{5:00}{6:000}",
+					dt.Year - YEAR_SUBSTR, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second, dt.Millisecond);
 
 				var nl = string.IsNullOrEmpty(text) ? string.Empty : Environment.NewLine;
 				var line = $"{Environment.NewLine}[{time}] {title}{nl}{text}";
@@ -79,13 +84,13 @@ namespace System
 			}
 		}
 
-		void rotate()
+		void rotate(bool force = false)
 		{
-			if ((logStream.Position) > rotatePosition)
+			if (force || (logStream.Position) > rotatePosition)
 			{
 				var utc = DateTime.UtcNow;
-				var time = string.Format("{0:0000}{1:00}{2:00}-{3:00}{4:00}{5:00}{6:000}",
-					utc.Year, utc.Month, utc.Day, utc.Hour, utc.Minute, utc.Second, utc.Millisecond);
+				var time = string.Format("{0:00}{1:00}{2:00}-{3:00}{4:00}{5:00}{6:000}",
+					utc.Year - YEAR_SUBSTR, utc.Month, utc.Day, utc.Hour, utc.Minute, utc.Second, utc.Millisecond);
 
 				var dir = Path.GetDirectoryName(Filename);
 
@@ -94,7 +99,7 @@ namespace System
 
 				var newLog = Path.Combine(dir, $"{Filename}-{time}{Extension}");
 
-				logStream.Dispose();
+				if (logStream != null) logStream.Dispose();
 
 				logStream = new FileStream(newLog, FileMode.Append);
 				logFile = new FileInfo(newLog);
@@ -130,5 +135,7 @@ namespace System
 		FileInfo logFile;
 
 		object rotationLock = new object();
+
+		const int YEAR_SUBSTR = 2000;
 	}
 }
