@@ -3,11 +3,11 @@ using System.Runtime.CompilerServices;
 
 namespace brays
 {
-	public class LogCfg
+	public class XLogCfg
 	{
-		public LogCfg(
-			string filePath, bool enabled, TraceOps trace = (TraceOps)((1 << 14) - 1),
-			string ext = "brays", int rotSizeKb = 500)
+		public XLogCfg(
+			string filePath, bool enabled, XTraceOps trace = (XTraceOps)((1 << 5) - 1),
+			string ext = "bx", int rotSizeKb = 500)
 		{
 			LogFilePath = filePath;
 			IsEnabled = enabled;
@@ -17,17 +17,12 @@ namespace brays
 		}
 
 		/// <summary>
-		/// The beamer init will create a new log file. 
+		/// Will create a new log file. 
 		/// </summary>
 		public bool RotateLogAtStart = true;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool IsOn(TraceOps op) => (op & Flags) == op && IsEnabled;
-
-		/// <summary>
-		/// If not null will be invoked on each trace.
-		/// </summary>
-		public Action<TraceOps, string, string> OnTrace;
+		public bool IsOn(XTraceOps op) => (op & Flags) == op && IsEnabled;
 
 		/// <summary>
 		/// The trace file path.
@@ -52,6 +47,6 @@ namespace brays
 		/// <summary>
 		/// The trace-enabled ops.
 		/// </summary>
-		public TraceOps Flags;
+		public XTraceOps Flags;
 	}
 }

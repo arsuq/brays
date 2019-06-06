@@ -34,7 +34,7 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
-						Log = new LogCfg("rayA", true),
+						Log = new BeamerLogCfg("rayA", true),
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 30
@@ -71,7 +71,7 @@ namespace brays.tests
 					}
 				}, new BeamerCfg()
 				{
-					Log = new LogCfg("rayB", true),
+					Log = new BeamerLogCfg("rayB", true),
 #if DEBUG
 					dropFrames = true,
 					deopFramePercent = 30

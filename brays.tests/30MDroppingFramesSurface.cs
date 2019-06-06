@@ -84,7 +84,7 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
-						Log = new LogCfg("rayA", true) { OnTrace = null },
+						Log = new BeamerLogCfg("rayA", true) { OnTrace = null },
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 20
@@ -94,7 +94,7 @@ namespace brays.tests
 
 				rayB = new RayBeamer(receive, new BeamerCfg()
 				{
-					Log = new LogCfg("rayB", true) { OnTrace = null },
+					Log = new BeamerLogCfg("rayB", true) { OnTrace = null },
 #if DEBUG
 					dropFrames = true,
 					deopFramePercent = 20

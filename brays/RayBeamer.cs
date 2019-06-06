@@ -12,12 +12,12 @@ namespace brays
 {
 	public class RayBeamer : IDisposable
 	{
-		public RayBeamer(Action<MemoryFragment> onReceived, BeamerCfg cfg)
+		public RayBeamer(Action<MemoryFragment> onReceive, BeamerCfg cfg)
 		{
-			if (onReceived == null || cfg == null) throw new ArgumentNullException();
+			if (onReceive == null || cfg == null) throw new ArgumentNullException();
 
 			ID = Guid.NewGuid();
-			this.onReceived = onReceived;
+			this.onReceive = onReceive;
 			this.cfg = cfg;
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
@@ -26,7 +26,7 @@ namespace brays
 			if (cfg.Log != null)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB, cfg.Log.RotateLogAtStart);
 			else
-				cfg.Log = new LogCfg(null, false, 0);
+				cfg.Log = new BeamerLogCfg(null, false, 0);
 		}
 
 		public void Dispose()
@@ -723,7 +723,7 @@ namespace brays
 
 			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) &&
 				ta.OnTileExchange != null) ta.OnTileExchange(xf);
-			else onReceived(xf);
+			else onReceive(xf);
 		}
 
 		void procPulse(MemoryFragment frag)
@@ -766,7 +766,7 @@ namespace brays
 					{
 						try
 						{
-							onReceived(x);
+							onReceive(x);
 						}
 						catch (MemoryLaneException mlx)
 						{
@@ -845,14 +845,14 @@ namespace brays
 
 			int fid = f.FrameID;
 
-			if (b.IsComplete && onReceived != null &&
+			if (b.IsComplete && onReceive != null &&
 				Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
 				ThreadPool.QueueUserWorkItem((block) =>
 				{
 					try
 					{
 						if (logop) trace(TraceOps.ProcBlock, fid, $"B: {block.ID} completed.");
-						onReceived(block.Fragment);
+						onReceive(block.Fragment);
 					}
 					catch { }
 				}, b, false);
@@ -1194,7 +1194,7 @@ namespace brays
 			}
 		}
 
-		Action<MemoryFragment> onReceived;
+		Action<MemoryFragment> onReceive;
 
 		HeapHighway outHighway;
 		IMemoryHighway blockHighway;

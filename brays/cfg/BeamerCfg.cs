@@ -10,7 +10,7 @@ namespace brays
 		/// <param name="receiveHighway">For the blocks, i.e. do not assume lengths.</param>
 		/// <param name="tileXHighway">For tile exchanges. Pass null to init with a heap hw with 65K lanes.</param>
 		/// <param name="logcfg">The logging settings.</param>
-		public BeamerCfg(IMemoryHighway receiveHighway = null, IMemoryHighway tileXHighway = null, LogCfg logcfg = null)
+		public BeamerCfg(IMemoryHighway receiveHighway = null, IMemoryHighway tileXHighway = null, BeamerLogCfg logcfg = null)
 		{
 			ReceiveHighway = receiveHighway != null ? receiveHighway : new HeapHighway();
 			TileExchangeHighway = tileXHighway != null ?
@@ -57,7 +57,7 @@ namespace brays
 		/// <summary>
 		/// The log configuration.
 		/// </summary>
-		public LogCfg Log;
+		public BeamerLogCfg Log;
 
 		/// <summary>
 		/// If true - sends probe dgrams every ProbeFreqMS. 

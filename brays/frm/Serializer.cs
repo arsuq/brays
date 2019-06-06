@@ -1,52 +1,89 @@
-﻿using System.IO;
-using System.Text;
+﻿using System;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.Runtime.Serialization.Json;
 using System.Xml.Serialization;
 
 namespace brays
 {
 	public static class Serializer
 	{
-		public static string ToXml<T>(this T o)
+		public static T Deserialize<T>(this MemoryFragment f, SerializationType st, int from = 0)
 		{
+			if (f == null || f.IsDisposed) throw new ArgumentNullException("f");
+
+			object o = null;
+
+			using (var fs = f.CreateStream())
+			{
+				if (from > 0) fs.Seek(from, SeekOrigin.Begin);
+
+				switch (st)
+				{
+					case SerializationType.Binary:
+					{
+						var bf = new BinaryFormatter();
+						o = bf.Deserialize(fs);
+						break;
+					}
+					case SerializationType.Json:
+					{
+						var ds = new DataContractJsonSerializer(typeof(T));
+						o = ds.ReadObject(fs);
+						break;
+					}
+					case SerializationType.Xml:
+					{
+						var s = new XmlSerializer(typeof(T));
+						o = s.Deserialize(fs);
+						break;
+					}
+					case SerializationType.None:
+					default:
+					break;
+				}
+
+
+				return (T)o;
+			}
+		}
+
+		public static MemoryFragment Serialize<T>(this T o, SerializationType st, IMemoryHighway hw)
+		{
+			if (hw == null || hw.IsDisposed) throw new ArgumentNullException("hw");
+
 			using (var ms = new MemoryStream())
 			{
-				var s = new XmlSerializer(typeof(T));
+				switch (st)
+				{
+					case SerializationType.Binary:
+					{
+						var bf = new BinaryFormatter();
+						bf.Serialize(ms, o);
+						break;
+					}
+					case SerializationType.Json:
+					{
+						var ds = new DataContractJsonSerializer(typeof(T));
+						ds.WriteObject(ms, o);
+						break;
+					}
+					case SerializationType.Xml:
+					{
+						var s = new XmlSerializer(typeof(T));
+						s.Serialize(ms, o);
+						break;
+					}
+					case SerializationType.None:
+					default:
+					break;
+				}
 
-				s.Serialize(ms, o);
-				var bytes = ms.ToArray();
+				var f = hw.AllocFragment((int)ms.Length);
+				var fs = f.CreateStream();
+				ms.CopyTo(fs);
 
-				return Encoding.UTF8.GetString(bytes, 0, bytes.Length);
-			}
-		}
-
-		public static void ToXmlFile<T>(this T o, string path)
-		{
-			using (var ms = new FileStream(path, FileMode.OpenOrCreate))
-			{
-				var s = new XmlSerializer(typeof(T));
-
-				s.Serialize(ms, o);
-				ms.Flush();
-			}
-		}
-
-		public static T FromXml<T>(string xml)
-		{
-			using (var sr = new StringReader(xml))
-			{
-				var s = new XmlSerializer(typeof(T));
-
-				return (T)s.Deserialize(sr);
-			}
-		}
-
-		public static T FromXmlFile<T>(string path)
-		{
-			using (var sr = new FileStream(path, FileMode.Open))
-			{
-				var s = new XmlSerializer(typeof(T));
-
-				return (T)s.Deserialize(sr);
+				return f;
 			}
 		}
 	}

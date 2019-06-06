@@ -99,7 +99,7 @@ namespace brays.tests
 				});
 				rayB = new RayBeamer(receive, new BeamerCfg()
 				{
-					Log = new LogCfg("rayB", true, traceops),
+					Log = new BeamerLogCfg("rayB", true, traceops),
 					TileSizeBytes = 60000
 				});
 

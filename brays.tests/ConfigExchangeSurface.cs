@@ -32,7 +32,7 @@ namespace brays.tests
 
 				rayA = new RayBeamer((f) => { }, new BeamerCfg()
 				{
-					Log = new LogCfg("rayA", true),
+					Log = new BeamerLogCfg("rayA", true),
 					MaxBeamedTilesAtOnce = CFGA
 #if DEBUG
 					, dropFrames = true,
@@ -42,7 +42,7 @@ namespace brays.tests
 
 				rayB = new RayBeamer((f) => { }, new BeamerCfg()
 				{
-					Log = new LogCfg("rayB", true),
+					Log = new BeamerLogCfg("rayB", true),
 					MaxBeamedTilesAtOnce = CFGB
 #if DEBUG
 					, dropFrames = true,

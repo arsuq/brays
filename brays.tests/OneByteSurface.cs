@@ -26,7 +26,7 @@ namespace brays.tests
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 				rayA = new RayBeamer((f) => { Console.WriteLine("?"); },
-					new BeamerCfg() { Log = new LogCfg("rayA", true) });
+					new BeamerCfg() { Log = new BeamerLogCfg("rayA", true) });
 				rayB = new RayBeamer((f) =>
 				{
 					if (f.Span()[0] == 77)
@@ -42,7 +42,7 @@ namespace brays.tests
 
 					rst.Set();
 
-				}, new BeamerCfg() { Log = new LogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", true) });
 
 				using (var hw = new HeapHighway(50))
 				{

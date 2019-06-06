@@ -14,6 +14,8 @@ namespace brays
 
 		public static Task<bool> AsTask(this WaitHandle wh, TimeSpan timeout)
 		{
+			// [!!] Will deadlock on mutex as the same thread must release.
+
 			var tcs = new TaskCompletionSource<bool>();
 			var reg = ThreadPool.RegisterWaitForSingleObject(wh, (state, timedOut) =>
 			{

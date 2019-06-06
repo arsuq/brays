@@ -40,7 +40,7 @@ namespace brays.tests
 
 				rayA = new RayBeamer(
 					(f) => { Console.WriteLine("?"); },
-					new BeamerCfg() { Log = new LogCfg("rayA", false) });
+					new BeamerCfg() { Log = new BeamerLogCfg("rayA", false) });
 
 				rayB = new RayBeamer((f) =>
 				{
@@ -76,7 +76,7 @@ namespace brays.tests
 						if (f != null) f.Dispose();
 					}
 
-				}, new BeamerCfg() { Log = new LogCfg("rayB", false) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", false) });
 
 				using (var hw = new HeapHighway())
 				{
@@ -159,7 +159,7 @@ namespace brays.tests
 				int totalSent = 0;
 				int totalReceived = 0;
 
-				rayA = new RayBeamer((f) => { }, new BeamerCfg() { Log = new LogCfg("rayA", true) });
+				rayA = new RayBeamer((f) => { }, new BeamerCfg() { Log = new BeamerLogCfg("rayA", true) });
 
 				rayB = new RayBeamer((f) =>
 				{
@@ -181,7 +181,7 @@ namespace brays.tests
 						if (f != null) f.Dispose();
 					}
 
-				}, new BeamerCfg() { Log = new LogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", true) });
 
 				var hw = new HeapHighway();
 				var ta = new Task(async () =>
