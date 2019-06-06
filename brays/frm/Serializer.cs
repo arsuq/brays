@@ -2,7 +2,6 @@
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.Serialization.Json;
-using System.Xml.Serialization;
 
 namespace brays
 {
@@ -11,6 +10,7 @@ namespace brays
 		public static T Deserialize<T>(this MemoryFragment f, SerializationType st, int from = 0)
 		{
 			if (f == null || f.IsDisposed) throw new ArgumentNullException("f");
+			if (st == SerializationType.None) return default;
 
 			object o = null;
 
@@ -32,17 +32,8 @@ namespace brays
 						o = ds.ReadObject(fs);
 						break;
 					}
-					case SerializationType.Xml:
-					{
-						var s = new XmlSerializer(typeof(T));
-						o = s.Deserialize(fs);
-						break;
-					}
-					case SerializationType.None:
-					default:
-					break;
+					default: return default;
 				}
-
 
 				return (T)o;
 			}
@@ -51,6 +42,7 @@ namespace brays
 		public static MemoryFragment Serialize<T>(this T o, SerializationType st, IMemoryHighway hw)
 		{
 			if (hw == null || hw.IsDisposed) throw new ArgumentNullException("hw");
+			if (st == SerializationType.None) return null;
 
 			using (var ms = new MemoryStream())
 			{
@@ -68,19 +60,13 @@ namespace brays
 						ds.WriteObject(ms, o);
 						break;
 					}
-					case SerializationType.Xml:
-					{
-						var s = new XmlSerializer(typeof(T));
-						s.Serialize(ms, o);
-						break;
-					}
-					case SerializationType.None:
-					default:
-					break;
+					default: return null;
 				}
 
 				var f = hw.AllocFragment((int)ms.Length);
 				var fs = f.CreateStream();
+				ms.Seek(0, SeekOrigin.Begin);
+				fs.Seek(0, SeekOrigin.Begin);
 				ms.CopyTo(fs);
 
 				return f;
