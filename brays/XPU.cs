@@ -13,7 +13,7 @@ namespace brays
 		{
 			this.cfg = cfg;
 			this.beamer = new RayBeamer(onReceive, bcfg);
-			map = new ConcurrentDictionary<string, Action<MemoryFragment>>();
+			map = new ConcurrentDictionary<string, Action<Exchange>>();
 		}
 
 		public void Dispose()
@@ -49,7 +49,7 @@ namespace brays
 		}
 
 
-		public bool RegisterAPI(string key, Action<MemoryFragment> f) => map.TryAdd(key, f);
+		public bool RegisterAPI(string key, Action<Exchange> f) => map.TryAdd(key, f);
 
 		public void UnregisterAPI(string key) => map.TryRemove(key, out _);
 
@@ -60,16 +60,15 @@ namespace brays
 
 		void onReceive(MemoryFragment f)
 		{
-			var x = new Exchange(f);
-
-			// Not an exchange 
-			if (!x.IsValid) f.Dispose();
+			using (var x = new Exchange(f))
+				if (x.IsValid && map.TryGetValue(x.resID, out Action<Exchange> action))
+					action(x);
 		}
 
 		RayBeamer beamer;
 		XPUState state;
 		XCfg cfg;
-		ConcurrentDictionary<string, Action<MemoryFragment>> map;
+		ConcurrentDictionary<string, Action<Exchange>> map;
 
 		int isDisposed;
 		int exchangeID;
