@@ -39,13 +39,19 @@ namespace brays
 			}
 		}
 
-		public static MemoryFragment Serialize<T>(this T o, SerializationType st, IMemoryHighway hw)
+		public static T Deserialize<T>(this Exchange ix) =>
+			Deserialize<T>(ix.Fragment, ix.SerializationType, ix.DataOffset);
+
+		public static MemoryFragment Serialize<T>(this T o, SerializationType st,
+			IMemoryHighway hw, Action<MemoryStream> addHeader = null)
 		{
 			if (hw == null || hw.IsDisposed) throw new ArgumentNullException("hw");
 			if (st == SerializationType.None) return null;
 
 			using (var ms = new MemoryStream())
 			{
+				if (addHeader != null) addHeader(ms);
+
 				switch (st)
 				{
 					case SerializationType.Binary:
@@ -71,6 +77,35 @@ namespace brays
 
 				return f;
 			}
+		}
+
+		public static MemoryStream Serialize<T>(this T o, SerializationType st, Action<MemoryStream> addHeader = null)
+		{
+			if (st == SerializationType.None) return null;
+
+			var ms = new MemoryStream();
+			if (addHeader != null) addHeader(ms);
+
+			switch (st)
+			{
+				case SerializationType.Binary:
+				{
+					var bf = new BinaryFormatter();
+					bf.Serialize(ms, o);
+					break;
+				}
+				case SerializationType.Json:
+				{
+					var ds = new DataContractJsonSerializer(typeof(T));
+					ds.WriteObject(ms, o);
+					break;
+				}
+				default: return null;
+			}
+
+			ms.Seek(0, SeekOrigin.Begin);
+
+			return ms;
 		}
 	}
 }

@@ -712,8 +712,7 @@ namespace brays
 			// The procTile fragment will be disposed immediately after 
 			// this method exit (i.e. no async for the callback). 
 			// The newly created OnTileExchange frag MUST be disposed 
-			// in the callback (or wait for a GC pass as the default 
-			// TileExchangeHighway tracks ghosts).
+			// in the callback.
 
 			if (f.Data.Length > 0)
 			{

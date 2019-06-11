@@ -14,10 +14,10 @@ namespace brays
 	public enum XTraceOps : int
 	{
 		None = 0,
-		Exchange = 1,
-		Request = 1 << 2,
-		Reply = 1 << 3,
-		Error = 1 << 4
+		xIn = 1,
+		xInRef = 1 << 2,
+		xInError = 1 << 3,
+		xOut = 1 << 4
 	}
 
 	public enum XPUState
