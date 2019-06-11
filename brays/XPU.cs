@@ -68,7 +68,15 @@ namespace brays
 			return QueueExchange(ox, onReply);
 		}
 
-		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, f);
+		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
+			resAPIs.TryAdd(key, (x) =>
+			{
+				if (x != null) f(new Exchange<T>(x.Fragment));
+				else f(null);
+			});
+
+		public bool RegisterAPI(string key, Action<Exchange> f) =>
+			resAPIs.TryAdd(key, (x) => { f(x); });
 
 		public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _);
 
