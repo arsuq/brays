@@ -32,36 +32,43 @@ namespace brays.tests
 				 new HeapHighway(ushort.MaxValue)));
 
 			const string F1 = "f1";
-			const string F2 = "f2";
 
 			try
 			{
-				a.RegisterAPI(F1, f1);
-				b.RegisterAPI(F2, f2);
+				b.RegisterAPI(F1, add_one);
 
 				await a.Start(s, t);
 				await b.Start(t, s);
 
-				var a2b = Task.Run(() =>
+				await a.QueueExchange<int>(F1, 3, (ix) =>
 				{
-					//a.QueueExchange(F1, )
+					var rpl = ix.Make<int>();
+
+					if (rpl != 4)
+					{
+						Passed = false;
+						FailureMessage = "Exchanged wrong values.";
+						return;
+					}
 				});
+
+
 			}
 			catch (Exception ex)
 			{
-
+				Passed = false;
+				FailureMessage = ex.ToString();
 			}
 		}
 
 
-		void f1(Exchange ix)
+		void add_one(Exchange ix)
 		{
+			var data = ix.Make<int>();
 
-		}
+			data++;
 
-		void f2(Exchange ix)
-		{
-
+			ix.XPU.Reply(ix, data);
 		}
 	}
 }

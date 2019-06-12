@@ -18,6 +18,7 @@ namespace brays
 			this.cfg = cfg;
 			this.beamer = new RayBeamer(onReceive, cfg.bcfg);
 			resAPIs = new ConcurrentDictionary<string, Action<Exchange>>();
+			refAwaits = new ConcurrentDictionary<int, ExchangeAwait>();
 
 			if (cfg.log != null)
 				log = new Log(cfg.log.LogFilePath, cfg.log.Ext,
@@ -62,16 +63,25 @@ namespace brays
 		public Task<bool> QueueExchange<T>(string res, T arg, Action<Exchange> onReply = null)
 		{
 			var id = Interlocked.Increment(ref exchangeID);
-			var ms = Serializer.Serialize(arg, SerializationType.Binary);
-			var ox = new Exchange<T>(id, 0, 0, SerializationType.Binary, 0, 0, res, arg, cfg.outHighway).Instance;
+			var ox = new Exchange<T>(this, id, 0, 0, SerializationType.Binary, 0, 0, res, arg, cfg.outHighway).Instance;
 
 			return QueueExchange(ox, onReply);
+		}
+
+		public Task<bool> Reply<T>(Exchange x, T arg)
+		{
+			var id = Interlocked.Increment(ref exchangeID);
+			var ox = new Exchange<T>(this,
+				id, x.ID, 0, x.SerializationType, 0, 0,
+				string.Empty, arg, cfg.outHighway).Instance;
+
+			return QueueExchange(ox);
 		}
 
 		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
 			resAPIs.TryAdd(key, (x) =>
 			{
-				if (x != null) f(new Exchange<T>(x.Fragment));
+				if (x != null) f(new Exchange<T>(this, x.Fragment));
 				else f(null);
 			});
 
@@ -83,7 +93,7 @@ namespace brays
 		public async Task<IEnumerable<string>> GetRemoteAPIList()
 		{
 			var id = Interlocked.Increment(ref exchangeID);
-			var ox = new Exchange(id, 0, 0, SerializationType.Binary, 0, 0, API_LIST, default, cfg.outHighway);
+			var ox = new Exchange(this, id, 0, 0, SerializationType.Binary, 0, 0, API_LIST, default, cfg.outHighway);
 
 			var ok = await QueueExchange(ox, (ix) =>
 			{
@@ -102,7 +112,7 @@ namespace brays
 
 		void onReceive(MemoryFragment f)
 		{
-			using (var x = new Exchange(f))
+			using (var x = new Exchange(this, f))
 			{
 				if (!x.IsValid) return;
 
@@ -130,7 +140,7 @@ namespace brays
 			using (var frag = Serializer.Serialize(API, (SerializationType)x.SrlType, cfg.outHighway))
 			{
 				var id = Interlocked.Increment(ref exchangeID);
-				var rsp = new Exchange(
+				var rsp = new Exchange(this,
 					id, x.ID, 0, (SerializationType)x.SrlType,
 					0, 0, null, frag, cfg.outHighway);
 

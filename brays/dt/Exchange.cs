@@ -6,8 +6,10 @@ namespace brays
 {
 	public class Exchange : IDisposable
 	{
-		public Exchange(MemoryFragment f)
+		public Exchange(XPU xpu, MemoryFragment f)
 		{
+			XPU = xpu;
+
 			int tid = 0;
 			int pos = 0;
 			pos = f.Read(ref tid, pos);
@@ -25,12 +27,13 @@ namespace brays
 				pos = f.Read(ref ErrorCode, pos);
 				pos = f.Read(ref XState, pos);
 				pos = f.Read(ref ResIDLen, pos);
-				ResID = new string(f.ToSpan<char>().Slice(pos, ResIDLen));
+				ResID = Encoding.UTF8.GetString(f.Span().Slice(pos, ResIDLen));
 				DataOffset = pos + ResIDLen;
 			}
 		}
 
 		public Exchange(
+			XPU xpu,
 			int ID,
 			int refID,
 			byte type,
@@ -41,6 +44,8 @@ namespace brays
 			Span<byte> data,
 			IMemoryHighway hw)
 		{
+			XPU = xpu;
+
 			var resBytes = Encoding.UTF8.GetBytes(resID);
 
 			ResIDLen = (ushort)resBytes.Length;
@@ -97,6 +102,7 @@ namespace brays
 			}
 		}
 
+		public readonly XPU XPU;
 		public readonly bool IsValid;
 		public Span<byte> Data => Fragment.Span().Slice(DataOffset);
 		public readonly MemoryFragment Fragment;
@@ -119,18 +125,19 @@ namespace brays
 		// This is technically not mandatory since the Beamer is not shared and all received frags
 		// can only be exchanges. 
 		public const int EXCHANGE_TYPE_ID = 7777777;
-		public const int HEADER_LEN = 28;
+		public const int HEADER_LEN = 32;
 	}
 
 	public class Exchange<T>
 	{
-		public Exchange(MemoryFragment f)
+		public Exchange(XPU xpu, MemoryFragment f)
 		{
-			Instance = new Exchange(f);
+			Instance = new Exchange(xpu, f);
 			Arg = Serializer.Deserialize<T>(Instance);
 		}
 
 		public Exchange(
+			XPU xpu,
 			int ID,
 			int refID,
 			byte type,
@@ -152,14 +159,16 @@ namespace brays
 				BitConverter.TryWriteBytes(header.Slice(8), refID);
 				BitConverter.TryWriteBytes(header.Slice(12), type);
 				BitConverter.TryWriteBytes(header.Slice(13), (byte)st);
-				BitConverter.TryWriteBytes(header.Slice(14), errorCode);
-				BitConverter.TryWriteBytes(header.Slice(18), state);
+				BitConverter.TryWriteBytes(header.Slice(14), DateTime.Now.Ticks);
+				BitConverter.TryWriteBytes(header.Slice(22), errorCode);
+				BitConverter.TryWriteBytes(header.Slice(26), state);
+				BitConverter.TryWriteBytes(header.Slice(30), resLen);
 
-				resBytes.CopyTo(header.Slice(22));
+				resBytes.CopyTo(header.Slice(Exchange.HEADER_LEN));
 				ms.Write(header);
 			});
 
-			Instance = new Exchange(f);
+			Instance = new Exchange(xpu, f);
 			Arg = arg;
 		}
 
