@@ -26,4 +26,12 @@ namespace brays
 		Connected,
 		Faulted
 	}
+
+	public enum XPUErrorCode : int
+	{
+		NotSet = 0,
+		NotBeamed,
+		Timeout,
+		Deserialization
+	}
 }

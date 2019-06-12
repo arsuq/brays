@@ -6,7 +6,7 @@ namespace brays
 {
 	public class Exchange : IDisposable
 	{
-		public Exchange(XPU xpu, MemoryFragment f)
+		internal Exchange(XPU xpu, MemoryFragment f)
 		{
 			XPU = xpu;
 
@@ -32,7 +32,7 @@ namespace brays
 			}
 		}
 
-		public Exchange(
+		internal Exchange(
 			XPU xpu,
 			int ID,
 			int refID,
@@ -82,6 +82,9 @@ namespace brays
 			Fragment.Write(data, pos);
 		}
 
+		internal Exchange(int errorCode) { ErrorCode = errorCode; }
+		internal Exchange(XPUErrorCode errorCode) { ErrorCode = (int)errorCode; }
+
 		public void Dispose() => Fragment?.Dispose();
 
 		public T Make<T>() => Serializer.Deserialize<T>(this);
@@ -107,6 +110,7 @@ namespace brays
 		public Span<byte> Data => Fragment.Span().Slice(DataOffset);
 		public readonly MemoryFragment Fragment;
 		public SerializationType SerializationType => (SerializationType)SrlType;
+		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
 
 		// [i] These fields could be props reading from the Fragment at offset...
 
@@ -130,13 +134,15 @@ namespace brays
 
 	public class Exchange<T>
 	{
-		public Exchange(XPU xpu, MemoryFragment f)
+		internal Exchange(XPU xpu, MemoryFragment f)
 		{
-			Instance = new Exchange(xpu, f);
-			Arg = Serializer.Deserialize<T>(Instance);
+			var x = new Exchange(xpu, f);
+
+			if (!x.TryDeserialize(out Arg)) Instance = new Exchange(XPUErrorCode.Deserialization);
+			else Instance = x;
 		}
 
-		public Exchange(
+		internal Exchange(
 			XPU xpu,
 			int ID,
 			int refID,
@@ -171,6 +177,9 @@ namespace brays
 			Instance = new Exchange(xpu, f);
 			Arg = arg;
 		}
+
+		internal Exchange(int errorCode) => Instance = new Exchange(errorCode);
+		internal Exchange(XPUErrorCode errorCode) => Instance = new Exchange(errorCode);
 
 		public readonly Exchange Instance;
 		public readonly T Arg;

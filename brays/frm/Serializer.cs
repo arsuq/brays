@@ -42,6 +42,19 @@ namespace brays
 		public static T Deserialize<T>(this Exchange ix) =>
 			Deserialize<T>(ix.Fragment, ix.SerializationType, ix.DataOffset);
 
+		public static bool TryDeserialize<T>(this Exchange ix, out T o)
+		{
+			o = default;
+
+			try
+			{
+				o = Deserialize<T>(ix);
+
+				return true;
+			}
+			catch { return false; }
+		}
+
 		public static MemoryFragment Serialize<T>(this T o, SerializationType st,
 			IMemoryHighway hw, Action<MemoryStream> addHeader = null)
 		{

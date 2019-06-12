@@ -53,6 +53,70 @@ namespace brays
 			beamer.Stop();
 		}
 
+		public Task<Exchange> Trigger(string res, int timeoutMS = -1)
+		{
+			var id = Interlocked.Increment(ref exchangeID);
+			var ox = new Exchange(this, id, 0, 0, 0, 0, 0, res, default, cfg.outHighway);
+			var tc = new TaskCompletionSource<Exchange>();
+
+			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
+				tc.TrySetResult(new Exchange(XPUErrorCode.Timeout)));
+
+			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) => tc.TrySetResult(ix)));
+
+			Task.Run(() =>
+			{
+				if (!beamer.Beam(ox.Fragment).Result)
+					tc.TrySetResult(new Exchange(XPUErrorCode.NotBeamed));
+			});
+
+			return tc.Task;
+		}
+
+		public Task<Exchange> Request<O>(string res, O arg,
+			SerializationType st = SerializationType.Binary, int timeoutMS = -1)
+		{
+			var id = Interlocked.Increment(ref exchangeID);
+			var ox = new Exchange<O>(this, id, 0, 0, st, 0, 0, res, arg, cfg.outHighway).Instance;
+			var tc = new TaskCompletionSource<Exchange>();
+
+			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
+				tc.TrySetResult(new Exchange(XPUErrorCode.Timeout)));
+
+			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
+				tc.TrySetResult(new Exchange(this, ix.Fragment))));
+
+			Task.Run(() =>
+			{
+				if (!beamer.Beam(ox.Fragment).Result)
+					tc.TrySetResult(new Exchange(XPUErrorCode.NotBeamed));
+			});
+
+			return tc.Task;
+		}
+
+		public Task<Exchange<I>> Request<I, O>(string res, O arg,
+			SerializationType st = SerializationType.Binary, int timeoutMS = -1)
+		{
+			var id = Interlocked.Increment(ref exchangeID);
+			var ox = new Exchange<O>(this, id, 0, 0, st, 0, 0, res, arg, cfg.outHighway).Instance;
+			var tc = new TaskCompletionSource<Exchange<I>>();
+
+			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
+				tc.TrySetResult(new Exchange<I>(XPUErrorCode.Timeout)));
+
+			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
+				tc.TrySetResult(new Exchange<I>(this, ix.Fragment))));
+
+			Task.Run(() =>
+			{
+				if (!beamer.Beam(ox.Fragment).Result)
+					tc.TrySetResult(new Exchange<I>(XPUErrorCode.NotBeamed));
+			});
+
+			return tc.Task;
+		}
+
 		public Task<bool> QueueExchange(Exchange x, Action<Exchange> onReply = null)
 		{
 			if (onReply != null) refAwaits.TryAdd(x.ID, new ExchangeAwait(onReply));
@@ -60,10 +124,24 @@ namespace brays
 			return beamer.Beam(x.Fragment);
 		}
 
+		public Task<bool> QueueExchange<T>(Exchange x, Action<Exchange<T>> onReply = null)
+		{
+			if (onReply != null)
+				refAwaits.TryAdd(x.ID, new ExchangeAwait((ix) =>
+				{
+					if (ix != null) onReply(new Exchange<T>(this, x.Fragment));
+					else onReply(null);
+				}));
+
+			return beamer.Beam(x.Fragment);
+		}
+
 		public Task<bool> QueueExchange<T>(string res, T arg, Action<Exchange> onReply = null)
 		{
 			var id = Interlocked.Increment(ref exchangeID);
-			var ox = new Exchange<T>(this, id, 0, 0, SerializationType.Binary, 0, 0, res, arg, cfg.outHighway).Instance;
+			var ox = new Exchange<T>(this,
+				id, 0, 0, SerializationType.Binary,
+				0, 0, res, arg, cfg.outHighway).Instance;
 
 			return QueueExchange(ox, onReply);
 		}
@@ -85,8 +163,7 @@ namespace brays
 				else f(null);
 			});
 
-		public bool RegisterAPI(string key, Action<Exchange> f) =>
-			resAPIs.TryAdd(key, (x) => { f(x); });
+		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, (x) => { f(x); });
 
 		public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _);
 
