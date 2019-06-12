@@ -40,19 +40,17 @@ namespace brays.tests
 				await a.Start(s, t);
 				await b.Start(t, s);
 
-				await a.QueueExchange<int>(F1, 3, (ix) =>
+				var ix = await a.Request<int, int>(F1, 3);
+
+				if (!ix.IsOK || ix.Arg != 4)
 				{
-					var rpl = ix.Make<int>();
+					Passed = false;
+					FailureMessage = "Exchange failure.";
+					return;
+				}
 
-					if (rpl != 4)
-					{
-						Passed = false;
-						FailureMessage = "Exchanged wrong values.";
-						return;
-					}
-				});
-
-
+				Passed = true;
+				IsComplete = true;
 			}
 			catch (Exception ex)
 			{

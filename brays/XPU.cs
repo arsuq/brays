@@ -88,8 +88,34 @@ namespace brays
 
 			Task.Run(() =>
 			{
+				trace(XTraceOps.xOut, ox.ID, $"F: {ox.ExchangeFlags}");
+
 				if (!beamer.Beam(ox.Fragment).Result)
 					tc.TrySetResult(new Exchange(XPUErrorCode.NotBeamed));
+			});
+
+			return tc.Task;
+		}
+
+		public Task<Exchange<I>> Request<I>(string res,
+			SerializationType st = SerializationType.Binary, int timeoutMS = -1)
+		{
+			var id = Interlocked.Increment(ref exchangeID);
+			var ox = new Exchange(this, id, 0, 0, st, 0, 0, res, default, cfg.outHighway);
+			var tc = new TaskCompletionSource<Exchange<I>>();
+
+			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
+				tc.TrySetResult(new Exchange<I>(XPUErrorCode.Timeout)));
+
+			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
+				tc.TrySetResult(new Exchange<I>(this, ix.Fragment))));
+
+			Task.Run(() =>
+			{
+				trace(XTraceOps.xOut, ox.ID, $"F: {ox.ExchangeFlags}");
+
+				if (!beamer.Beam(ox.Fragment).Result)
+					tc.TrySetResult(new Exchange<I>(XPUErrorCode.NotBeamed));
 			});
 
 			return tc.Task;
@@ -110,6 +136,8 @@ namespace brays
 
 			Task.Run(() =>
 			{
+				trace(XTraceOps.xOut, ox.ID, $"F: {ox.ExchangeFlags}");
+
 				if (!beamer.Beam(ox.Fragment).Result)
 					tc.TrySetResult(new Exchange<I>(XPUErrorCode.NotBeamed));
 			});
@@ -119,7 +147,7 @@ namespace brays
 
 		public Task<bool> Reply<T>(Exchange x, T arg)
 		{
-			if (x.RefID > 0 && (x.ExchangeFlags | ExchangeFlags.ReplyAwaits) != ExchangeFlags.ReplyAwaits)
+			if ((x.ExchangeFlags | ExchangeFlags.ReplyAwaits) != ExchangeFlags.ReplyAwaits)
 				throw new ArgumentException("Can't reply because there is no awaiting handler.");
 
 			var id = Interlocked.Increment(ref exchangeID);
@@ -127,36 +155,7 @@ namespace brays
 				id, x.ID, 0, x.SerializationType, 0, 0,
 				string.Empty, arg, cfg.outHighway).Instance;
 
-			return QueueExchange(ox);
-		}
-
-		public Task<bool> QueueExchange(Exchange x, Action<Exchange> onReply = null)
-		{
-			if (onReply != null) refAwaits.TryAdd(x.ID, new ExchangeAwait(onReply));
-
-			return beamer.Beam(x.Fragment);
-		}
-
-		public Task<bool> QueueExchange<T>(Exchange x, Action<Exchange<T>> onReply = null)
-		{
-			if (onReply != null)
-				refAwaits.TryAdd(x.ID, new ExchangeAwait((ix) =>
-				{
-					if (ix != null) onReply(new Exchange<T>(this, x.Fragment));
-					else onReply(null);
-				}));
-
-			return beamer.Beam(x.Fragment);
-		}
-
-		public Task<bool> QueueExchange<T>(string res, T arg, Action<Exchange> onReply = null)
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var ox = new Exchange<T>(this,
-				id, 0, 0, SerializationType.Binary,
-				0, 0, res, arg, cfg.outHighway).Instance;
-
-			return QueueExchange(ox, onReply);
+			return beamer.Beam(ox.Fragment);
 		}
 
 		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
@@ -175,19 +174,10 @@ namespace brays
 			var id = Interlocked.Increment(ref exchangeID);
 			var ox = new Exchange(this, id, 0, 0, SerializationType.Binary, 0, 0, API_LIST, default, cfg.outHighway);
 
-			var ok = await QueueExchange(ox, (ix) =>
-			{
-				try
-				{
-					remoteAPI = Serializer.Deserialize<List<string>>(ix);
-				}
-				catch (Exception ex)
-				{
-					trace("Ex", "GetRemoteAPIList", ex.ToString());
-				}
-			});
+			var ix = await Request<List<string>>(ox.ResID);
+			if (ix.IsOK) remoteAPI = ix.Arg;
 
-			return ok ? remoteAPI : null;
+			return remoteAPI;
 		}
 
 		void onReceive(MemoryFragment f)
@@ -217,26 +207,19 @@ namespace brays
 
 			var API = new List<string>(resAPIs.Keys);
 
-			using (var frag = Serializer.Serialize(API, (SerializationType)x.SrlType, cfg.outHighway))
-			{
-				var id = Interlocked.Increment(ref exchangeID);
-				var rsp = new Exchange(this,
-					id, x.ID, 0, (SerializationType)x.SrlType,
-					0, 0, null, frag, cfg.outHighway);
-
-				QueueExchange(rsp);
-			}
+			if (!Reply(x, API).Result)
+				trace("Ex", "listAPIs", "Failed to reply");
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void trace(XTraceOps op, int xID, string title, string msg = null) =>
-			log.Write(string.Format("{0,10} {1, -20} {2}", xID, op, title), msg);
+			log.Write(string.Format("{0,12} {1, -10} {2}", xID, op, title), msg);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void trace(string op, string title, string msg = null)
 		{
 			if (log != null && Volatile.Read(ref cfg.log.IsEnabled))
-				log.Write(string.Format("{0,-12} {1, -20} {2}", " ", op, title), msg);
+				log.Write(string.Format("{0,-12} {1, -10} {2}", " ", op, title), msg);
 		}
 
 		async Task cleanup()

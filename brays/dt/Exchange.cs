@@ -112,6 +112,7 @@ namespace brays
 		public SerializationType SerializationType => (SerializationType)SrlType;
 		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
 		public ExchangeFlags ExchangeFlags => (ExchangeFlags)XFlags;
+		public bool IsOK => ErrorCode == 0;
 
 		// [i] These fields could be props reading from the Fragment at offset...
 
@@ -182,6 +183,7 @@ namespace brays
 		internal Exchange(int errorCode) => Instance = new Exchange(errorCode);
 		internal Exchange(XPUErrorCode errorCode) => Instance = new Exchange(errorCode);
 
+		public bool IsOK => Instance != null && Instance.IsOK;
 		public readonly Exchange Instance;
 		public readonly T Arg;
 	}
