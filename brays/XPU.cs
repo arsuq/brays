@@ -117,6 +117,19 @@ namespace brays
 			return tc.Task;
 		}
 
+		public Task<bool> Reply<T>(Exchange x, T arg)
+		{
+			if (x.RefID > 0 && (x.ExchangeFlags | ExchangeFlags.ReplyAwaits) != ExchangeFlags.ReplyAwaits)
+				throw new ArgumentException("Can't reply because there is no awaiting handler.");
+
+			var id = Interlocked.Increment(ref exchangeID);
+			var ox = new Exchange<T>(this,
+				id, x.ID, 0, x.SerializationType, 0, 0,
+				string.Empty, arg, cfg.outHighway).Instance;
+
+			return QueueExchange(ox);
+		}
+
 		public Task<bool> QueueExchange(Exchange x, Action<Exchange> onReply = null)
 		{
 			if (onReply != null) refAwaits.TryAdd(x.ID, new ExchangeAwait(onReply));
@@ -144,16 +157,6 @@ namespace brays
 				0, 0, res, arg, cfg.outHighway).Instance;
 
 			return QueueExchange(ox, onReply);
-		}
-
-		public Task<bool> Reply<T>(Exchange x, T arg)
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var ox = new Exchange<T>(this,
-				id, x.ID, 0, x.SerializationType, 0, 0,
-				string.Empty, arg, cfg.outHighway).Instance;
-
-			return QueueExchange(ox);
 		}
 
 		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
@@ -227,13 +230,13 @@ namespace brays
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void trace(XTraceOps op, int xID, string title, string msg = null) =>
-			log.Write(string.Format("{0,10} {1, -12} {2}", xID, op, title), msg);
+			log.Write(string.Format("{0,10} {1, -20} {2}", xID, op, title), msg);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void trace(string op, string title, string msg = null)
 		{
 			if (log != null && Volatile.Read(ref cfg.log.IsEnabled))
-				log.Write(string.Format("{0,-12} {1, -12} {2}", " ", op, title), msg);
+				log.Write(string.Format("{0,-12} {1, -20} {2}", " ", op, title), msg);
 		}
 
 		async Task cleanup()

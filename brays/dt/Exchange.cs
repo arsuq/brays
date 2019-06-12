@@ -21,7 +21,7 @@ namespace brays
 
 				pos = f.Read(ref ID, pos);
 				pos = f.Read(ref RefID, pos);
-				pos = f.Read(ref XType, pos);
+				pos = f.Read(ref XFlags, pos);
 				pos = f.Read(ref SrlType, pos);
 				pos = f.Read(ref Created, pos);
 				pos = f.Read(ref ErrorCode, pos);
@@ -36,7 +36,7 @@ namespace brays
 			XPU xpu,
 			int ID,
 			int refID,
-			byte type,
+			byte xflags,
 			SerializationType st,
 			int errorCode,
 			int state,
@@ -59,7 +59,7 @@ namespace brays
 
 			this.ID = ID;
 			this.RefID = refID;
-			this.XType = type;
+			this.XFlags = xflags;
 			this.SrlType = (byte)st;
 			this.Created = DateTime.Now.Ticks;
 			this.ErrorCode = errorCode;
@@ -69,7 +69,7 @@ namespace brays
 			pos = Fragment.Write(EXCHANGE_TYPE_ID, pos);
 			pos = Fragment.Write(ID, pos);
 			pos = Fragment.Write(refID, pos);
-			pos = Fragment.Write(type, pos);
+			pos = Fragment.Write(xflags, pos);
 			pos = Fragment.Write((byte)st, pos);
 			pos = Fragment.Write(Created, pos);
 			pos = Fragment.Write(errorCode, pos);
@@ -111,12 +111,13 @@ namespace brays
 		public readonly MemoryFragment Fragment;
 		public SerializationType SerializationType => (SerializationType)SrlType;
 		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
+		public ExchangeFlags ExchangeFlags => (ExchangeFlags)XFlags;
 
 		// [i] These fields could be props reading from the Fragment at offset...
 
 		public readonly int ID;
 		public readonly int RefID;
-		public readonly byte XType;
+		public readonly byte XFlags;
 		public readonly byte SrlType;
 		public readonly long Created;
 		public readonly int ErrorCode;
@@ -146,7 +147,7 @@ namespace brays
 			XPU xpu,
 			int ID,
 			int refID,
-			byte type,
+			byte xflags,
 			SerializationType st,
 			int errorCode,
 			int state,
@@ -163,7 +164,7 @@ namespace brays
 				BitConverter.TryWriteBytes(header, Exchange.EXCHANGE_TYPE_ID);
 				BitConverter.TryWriteBytes(header.Slice(4), ID);
 				BitConverter.TryWriteBytes(header.Slice(8), refID);
-				BitConverter.TryWriteBytes(header.Slice(12), type);
+				BitConverter.TryWriteBytes(header.Slice(12), xflags);
 				BitConverter.TryWriteBytes(header.Slice(13), (byte)st);
 				BitConverter.TryWriteBytes(header.Slice(14), DateTime.Now.Ticks);
 				BitConverter.TryWriteBytes(header.Slice(22), errorCode);

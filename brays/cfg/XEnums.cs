@@ -11,6 +11,13 @@ namespace brays
 	}
 
 	[Flags]
+	public enum ExchangeFlags : byte
+	{
+		NotSet = 0,
+		ReplyAwaits = 1
+	}
+
+	[Flags]
 	public enum XTraceOps : int
 	{
 		None = 0,
