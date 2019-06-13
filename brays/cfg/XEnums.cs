@@ -23,7 +23,7 @@ namespace brays
 		Created = 0,
 		Beamed = 1,
 		Received = 2,
-		Processed = 3,
+		Processing = 3,
 		Faulted = 4,
 		Disposed = 5
 	}

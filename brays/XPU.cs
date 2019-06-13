@@ -214,14 +214,22 @@ namespace brays
 
 			if (x.RefID > 0)
 			{
-				if (refAwaits.TryGetValue(x.RefID, out ExchangeAwait xa)) xa.OnReferred(x);
+				if (refAwaits.TryGetValue(x.RefID, out ExchangeAwait xa))
+				{
+					x.MarkAsProcessing();
+					xa.OnReferred(x);
+				}
 				else
 				{
 					trace(x, "Disposing, no refAwait was found.");
 					x.Dispose();
 				}
 			}
-			else if (resAPIs.TryGetValue(x.ResID, out Action<Exchange> action)) action(x);
+			else if (resAPIs.TryGetValue(x.ResID, out Action<Exchange> action))
+			{
+				x.MarkAsProcessing();
+				action(x);
+			}
 		}
 
 		void listAPIs(Exchange x)

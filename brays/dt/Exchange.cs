@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using System.Threading;
 
 namespace brays
 {
@@ -27,7 +28,7 @@ namespace brays
 				pos = f.Read(ref ResIDLen, pos);
 				ResID = Encoding.UTF8.GetString(f.Span().Slice(pos, ResIDLen));
 				DataOffset = pos + ResIDLen;
-				state = isCopy ? XState.Created : XState.Received;
+				state = isCopy ? (int)XState.Created : (int)XState.Received;
 			}
 		}
 
@@ -61,7 +62,7 @@ namespace brays
 			this.SrlType = (byte)st;
 			this.Created = DateTime.Now.Ticks;
 			this.ErrorCode = errorCode;
-			this.state = XState.Created;
+			this.state = (int)XState.Created;
 			this.ResID = resID;
 
 			pos = Fragment.Write(EXCHANGE_TYPE_ID, pos);
@@ -82,13 +83,13 @@ namespace brays
 		internal Exchange(int errorCode)
 		{
 			ErrorCode = errorCode;
-			state = XState.Faulted;
+			state = (int)XState.Faulted;
 		}
 
 		public void Dispose()
 		{
 			Fragment?.Dispose();
-			state = XState.Disposed;
+			state = (int)XState.Disposed;
 		}
 
 		public T Make<T>() => Serializer.Deserialize<T>(this);
@@ -109,15 +110,13 @@ namespace brays
 			}
 		}
 
-		public void MarkAsProcessed()
-		{
-			if (state == XState.Received) state = XState.Processed;
-		}
+		public bool MarkAsProcessing() =>
+			Interlocked.CompareExchange(ref state, (int)XState.Processing, (int)XState.Received) ==
+				(int)XState.Received;
 
-		public void MarkAsBeamed()
-		{
-			if (state == XState.Created) state = XState.Processed;
-		}
+		public bool MarkAsBeamed() =>
+			Interlocked.CompareExchange(ref state, (int)XState.Beamed, (int)XState.Created) ==
+				(int)XState.Created;
 
 		public readonly XPU XPU;
 		public readonly bool IsValid;
@@ -126,7 +125,7 @@ namespace brays
 		public SerializationType SerializationType => (SerializationType)SrlType;
 		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
 		public XFlags ExchangeFlags => (XFlags)Flags;
-		public XState State => state;
+		public XState State => (XState)state;
 
 		public bool IsOK => ErrorCode == 0;
 
@@ -142,7 +141,7 @@ namespace brays
 		public readonly string ResID;
 		public readonly int DataOffset;
 
-		public XState state;
+		public int state;
 
 		// [i] The fragment must begin with a special value to indicate that it is an exchange type.
 		// This is technically not mandatory since the Beamer is not shared and all received frags
