@@ -40,14 +40,13 @@ namespace brays.tests
 				await a.Start(s, t);
 				await b.Start(t, s);
 
-				var ix = await a.Request<int, int>(F1, 3);
-
-				if (!ix.IsOK || ix.Arg != 4)
-				{
-					Passed = false;
-					FailureMessage = "Exchange failure.";
-					return;
-				}
+				using (var ix = await a.Request<int, int>(F1, 3))
+					if (!ix.IsOK || ix.Arg != 4)
+					{
+						Passed = false;
+						FailureMessage = "Exchange failure.";
+						return;
+					}
 
 				Passed = true;
 				IsComplete = true;
@@ -66,7 +65,7 @@ namespace brays.tests
 
 			data++;
 
-			ix.XPU.Reply(ix, data);
+			ix.XPU.Reply(ix, data).Wait();
 		}
 	}
 }

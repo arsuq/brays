@@ -20,7 +20,7 @@ namespace brays
 		/// <summary>
 		/// The collection delay interval.
 		/// </summary>
-		public int CleanupFreqMS = 6000;
+		public int CleanupFreqMS = 10000;
 
 		internal readonly IMemoryHighway outHighway;
 		internal BeamerCfg bcfg;

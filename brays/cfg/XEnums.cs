@@ -6,25 +6,26 @@ namespace brays
 	{
 		None,
 		Binary,
-		Json,
-		Xml
+		Json
 	}
 
 	[Flags]
-	public enum ExchangeFlags : byte
+	public enum XFlags : int
 	{
 		NotSet = 0,
-		ReplyAwaits = 1
+		InArg = 1,
+		OutArg = 2,
+		IsReply = 4
 	}
 
-	[Flags]
-	public enum XTraceOps : int
+	public enum XState : byte
 	{
-		None = 0,
-		xIn = 1,
-		xInRef = 1 << 2,
-		xInError = 1 << 3,
-		xOut = 1 << 4
+		Created = 0,
+		Beamed = 1,
+		Received = 2,
+		Processed = 3,
+		Faulted = 4,
+		Disposed = 5
 	}
 
 	public enum XPUState

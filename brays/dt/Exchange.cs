@@ -1,12 +1,11 @@
 ﻿using System;
-using System.IO;
 using System.Text;
 
 namespace brays
 {
 	public class Exchange : IDisposable
 	{
-		internal Exchange(XPU xpu, MemoryFragment f)
+		internal Exchange(XPU xpu, MemoryFragment f, bool isCopy = false)
 		{
 			XPU = xpu;
 
@@ -21,14 +20,14 @@ namespace brays
 
 				pos = f.Read(ref ID, pos);
 				pos = f.Read(ref RefID, pos);
-				pos = f.Read(ref XFlags, pos);
+				pos = f.Read(ref Flags, pos);
 				pos = f.Read(ref SrlType, pos);
 				pos = f.Read(ref Created, pos);
 				pos = f.Read(ref ErrorCode, pos);
-				pos = f.Read(ref XState, pos);
 				pos = f.Read(ref ResIDLen, pos);
 				ResID = Encoding.UTF8.GetString(f.Span().Slice(pos, ResIDLen));
 				DataOffset = pos + ResIDLen;
+				state = isCopy ? XState.Created : XState.Received;
 			}
 		}
 
@@ -36,10 +35,9 @@ namespace brays
 			XPU xpu,
 			int ID,
 			int refID,
-			byte xflags,
+			int xflags,
 			SerializationType st,
 			int errorCode,
-			int state,
 			string resID,
 			Span<byte> data,
 			IMemoryHighway hw)
@@ -59,21 +57,20 @@ namespace brays
 
 			this.ID = ID;
 			this.RefID = refID;
-			this.XFlags = xflags;
+			this.Flags = xflags;
 			this.SrlType = (byte)st;
 			this.Created = DateTime.Now.Ticks;
 			this.ErrorCode = errorCode;
-			this.XState = state;
+			this.state = XState.Created;
 			this.ResID = resID;
 
 			pos = Fragment.Write(EXCHANGE_TYPE_ID, pos);
 			pos = Fragment.Write(ID, pos);
 			pos = Fragment.Write(refID, pos);
-			pos = Fragment.Write(xflags, pos);
+			pos = Fragment.Write((int)xflags, pos);
 			pos = Fragment.Write((byte)st, pos);
 			pos = Fragment.Write(Created, pos);
 			pos = Fragment.Write(errorCode, pos);
-			pos = Fragment.Write(state, pos);
 			pos = Fragment.Write(ResIDLen, pos);
 			pos = Fragment.Write(resBytes, pos);
 
@@ -82,10 +79,17 @@ namespace brays
 			Fragment.Write(data, pos);
 		}
 
-		internal Exchange(int errorCode) { ErrorCode = errorCode; }
-		internal Exchange(XPUErrorCode errorCode) { ErrorCode = (int)errorCode; }
+		internal Exchange(int errorCode)
+		{
+			ErrorCode = errorCode;
+			state = XState.Faulted;
+		}
 
-		public void Dispose() => Fragment?.Dispose();
+		public void Dispose()
+		{
+			Fragment?.Dispose();
+			state = XState.Disposed;
+		}
 
 		public T Make<T>() => Serializer.Deserialize<T>(this);
 
@@ -105,42 +109,55 @@ namespace brays
 			}
 		}
 
+		public void MarkAsProcessed()
+		{
+			if (state == XState.Received) state = XState.Processed;
+		}
+
+		public void MarkAsBeamed()
+		{
+			if (state == XState.Created) state = XState.Processed;
+		}
+
 		public readonly XPU XPU;
 		public readonly bool IsValid;
 		public Span<byte> Data => Fragment.Span().Slice(DataOffset);
 		public readonly MemoryFragment Fragment;
 		public SerializationType SerializationType => (SerializationType)SrlType;
 		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
-		public ExchangeFlags ExchangeFlags => (ExchangeFlags)XFlags;
+		public XFlags ExchangeFlags => (XFlags)Flags;
+		public XState State => state;
+
 		public bool IsOK => ErrorCode == 0;
 
 		// [i] These fields could be props reading from the Fragment at offset...
 
 		public readonly int ID;
 		public readonly int RefID;
-		public readonly byte XFlags;
+		public readonly int Flags;
 		public readonly byte SrlType;
 		public readonly long Created;
 		public readonly int ErrorCode;
-		public readonly int XState;
 		public readonly ushort ResIDLen;
 		public readonly string ResID;
 		public readonly int DataOffset;
+
+		public XState state;
 
 		// [i] The fragment must begin with a special value to indicate that it is an exchange type.
 		// This is technically not mandatory since the Beamer is not shared and all received frags
 		// can only be exchanges. 
 		public const int EXCHANGE_TYPE_ID = 7777777;
-		public const int HEADER_LEN = 32;
+		public const int HEADER_LEN = 31;
 	}
 
-	public class Exchange<T>
+	public class Exchange<T> : IDisposable
 	{
 		internal Exchange(XPU xpu, MemoryFragment f)
 		{
 			var x = new Exchange(xpu, f);
 
-			if (!x.TryDeserialize(out Arg)) Instance = new Exchange(XPUErrorCode.Deserialization);
+			if (!x.TryDeserialize(out Arg)) Instance = new Exchange((int)XPUErrorCode.Deserialization);
 			else Instance = x;
 		}
 
@@ -148,10 +165,9 @@ namespace brays
 			XPU xpu,
 			int ID,
 			int refID,
-			byte xflags,
+			int xflags,
 			SerializationType st,
 			int errorCode,
-			int state,
 			string resID,
 			T arg,
 			IMemoryHighway hw)
@@ -166,22 +182,22 @@ namespace brays
 				BitConverter.TryWriteBytes(header.Slice(4), ID);
 				BitConverter.TryWriteBytes(header.Slice(8), refID);
 				BitConverter.TryWriteBytes(header.Slice(12), xflags);
-				BitConverter.TryWriteBytes(header.Slice(13), (byte)st);
-				BitConverter.TryWriteBytes(header.Slice(14), DateTime.Now.Ticks);
-				BitConverter.TryWriteBytes(header.Slice(22), errorCode);
-				BitConverter.TryWriteBytes(header.Slice(26), state);
-				BitConverter.TryWriteBytes(header.Slice(30), resLen);
+				BitConverter.TryWriteBytes(header.Slice(16), (byte)st);
+				BitConverter.TryWriteBytes(header.Slice(17), DateTime.Now.Ticks);
+				BitConverter.TryWriteBytes(header.Slice(25), errorCode);
+				BitConverter.TryWriteBytes(header.Slice(29), resLen);
 
 				resBytes.CopyTo(header.Slice(Exchange.HEADER_LEN));
 				ms.Write(header);
 			});
 
-			Instance = new Exchange(xpu, f);
+			Instance = new Exchange(xpu, f, true);
 			Arg = arg;
 		}
 
 		internal Exchange(int errorCode) => Instance = new Exchange(errorCode);
-		internal Exchange(XPUErrorCode errorCode) => Instance = new Exchange(errorCode);
+
+		public void Dispose() => Instance?.Dispose();
 
 		public bool IsOK => Instance != null && Instance.IsOK;
 		public readonly Exchange Instance;
