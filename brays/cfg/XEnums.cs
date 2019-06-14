@@ -2,13 +2,6 @@
 
 namespace brays
 {
-	public enum SerializationType
-	{
-		None,
-		Binary,
-		Json
-	}
-
 	[Flags]
 	public enum XFlags : int
 	{
@@ -26,13 +19,6 @@ namespace brays
 		Processing = 3,
 		Faulted = 4,
 		Disposed = 5
-	}
-
-	public enum XPUState
-	{
-		Idle,
-		Connected,
-		Faulted
 	}
 
 	public enum XPUErrorCode : int

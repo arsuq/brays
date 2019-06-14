@@ -76,6 +76,11 @@ namespace brays.tests
 				Passed = false;
 				FailureMessage = ex.ToString();
 			}
+			finally
+			{
+				a.Dispose();
+				b.Dispose();
+			}
 		}
 
 		void verify_hash(Exchange<(byte[] data, byte[] hash)> ix)

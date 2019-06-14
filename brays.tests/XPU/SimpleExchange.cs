@@ -66,8 +66,12 @@ namespace brays.tests
 				Passed = false;
 				FailureMessage = ex.ToString();
 			}
+			finally
+			{
+				a.Dispose();
+				b.Dispose();
+			}
 		}
-
 
 		void add_one(Exchange ix)
 		{

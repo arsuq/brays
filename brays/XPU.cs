@@ -54,118 +54,7 @@ namespace brays
 			trace("Stopped");
 		}
 
-		public Task<Exchange> Trigger(string res, int timeoutMS = -1)
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var ox = new Exchange(this, id, 0, 0, 0, 0, res, default, cfg.outHighway);
-
-			return trigger(timeoutMS, ox);
-		}
-
-		public Task<Exchange> Trigger<O>(string res, O arg,
-			SerializationType st = SerializationType.Binary, int timeoutMS = -1)
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var xf = XFlags.InArg;
-			var ox = new Exchange<O>(this, id, 0, (int)xf, st, 0, res, arg, cfg.outHighway).Instance;
-
-			return trigger(timeoutMS, ox);
-		}
-
-		public Task<Exchange<I>> Request<I>(string res,
-			SerializationType st = SerializationType.Binary, int timeoutMS = -1)
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var xf = XFlags.OutArg;
-			var ox = new Exchange(this, id, 0, (int)xf, st, 0, res, default, cfg.outHighway);
-
-			return request<I>(timeoutMS, ox);
-		}
-
-		public Task<Exchange<I>> Request<I, O>(string res, O arg,
-			SerializationType st = SerializationType.Binary, int timeoutMS = -1)
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var xf = XFlags.InArg | XFlags.OutArg;
-			var ox = new Exchange<O>(this, id, 0, (int)xf, st, 0, res, arg, cfg.outHighway).Instance;
-
-			return request<I>(timeoutMS, ox);
-		}
-
-		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var xf = XFlags.IsReply | XFlags.InArg;
-
-			using (var ox = new Exchange<T>(this,
-				id, x.ID, (int)xf, x.SerializationType, 0,
-				string.Empty, arg, cfg.outHighway).Instance)
-			{
-				if (disposex) x.Dispose();
-				trace(ox);
-				return await beamer.Beam(ox.Fragment).ConfigureAwait(false);
-			}
-		}
-
-		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
-			resAPIs.TryAdd(key, (x) =>
-			{
-				if (x != null) f(new Exchange<T>(this, x.Fragment));
-				else f(null);
-			});
-
-		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, f);
-
-		public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _);
-
-		public async Task<IEnumerable<string>> GetRemoteAPIList()
-		{
-			var id = Interlocked.Increment(ref exchangeID);
-			var ox = new Exchange(this, id, 0, 0, SerializationType.Binary, 0, API_LIST, default, cfg.outHighway);
-
-			var ix = await Request<List<string>>(ox.ResID).ConfigureAwait(false);
-			if (ix.IsOK) remoteAPI = ix.Arg;
-
-			return remoteAPI;
-		}
-
-		Task<Exchange<I>> request<I>(int timeoutMS, Exchange ox)
-		{
-			var tc = new TaskCompletionSource<Exchange<I>>();
-
-			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
-			{
-				var tx = new Exchange<I>((int)XPUErrorCode.Timeout);
-				tc.TrySetResult(tx);
-				trace(tx.Instance);
-			});
-
-			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
-			{
-				var k = new Exchange<I>(this, ix.Fragment);
-				tc.TrySetResult(k);
-				trace(k.Instance);
-			}));
-
-			Task.Run(() =>
-			{
-				if (!beamer.Beam(ox.Fragment).Result)
-				{
-					var nb = new Exchange<I>((int)XPUErrorCode.NotBeamed);
-					tc.TrySetResult(nb);
-					trace(nb.Instance);
-				}
-				else
-				{
-					ox.MarkAsBeamed();
-					trace(ox);
-				}
-			});
-
-			return tc.Task;
-		}
-
-		Task<Exchange> trigger(int timeoutMS, Exchange ox)
+		public Task<Exchange> Trigger(Exchange ox, int timeoutMS = -1)
 		{
 			var tc = new TaskCompletionSource<Exchange>();
 
@@ -199,6 +88,93 @@ namespace brays
 
 			return tc.Task;
 		}
+
+		public Task<Exchange<I>> Request<I>(Exchange ox, int timeoutMS = -1)
+		{
+			var tc = new TaskCompletionSource<Exchange<I>>();
+
+			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
+			{
+				var tx = new Exchange<I>((int)XPUErrorCode.Timeout);
+				tc.TrySetResult(tx);
+				trace(tx);
+			});
+
+			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
+			{
+				var k = new Exchange<I>(this, ix.Fragment);
+				tc.TrySetResult(k);
+				trace(k);
+			}));
+
+			Task.Run(() =>
+			{
+				if (!beamer.Beam(ox.Fragment).Result)
+				{
+					var nb = new Exchange<I>((int)XPUErrorCode.NotBeamed);
+					tc.TrySetResult(nb);
+					trace(nb);
+				}
+				else
+				{
+					ox.MarkAsBeamed();
+					trace(ox);
+				}
+			});
+
+			return tc.Task;
+		}
+
+		public Task<Exchange> Trigger(string res, int timeoutMS = -1) =>
+			 Trigger(new Exchange(this, 0, 0, 0, res, default, cfg.outHighway), timeoutMS);
+
+		public Task<Exchange> Trigger<O>(string res, O arg, int timeoutMS = -1) =>
+			 Trigger(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway), timeoutMS);
+
+		public Task<Exchange<I>> Request<I>(string res, int timeoutMS = -1) =>
+			 Request<I>(new Exchange(this, 0, (int)XFlags.OutArg, 0, res, default, cfg.outHighway), timeoutMS);
+
+		public Task<Exchange<I>> Request<I, O>(string res, O arg, int timeoutMS = -1) =>
+			 Request<I>(new Exchange<O>(this,
+					0, (int)(XFlags.InArg | XFlags.OutArg),
+					0, res, arg, cfg.outHighway), timeoutMS);
+
+		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
+		{
+			var xf = XFlags.IsReply | XFlags.InArg;
+
+			using (Exchange ox = new Exchange<T>(this,
+				x.ID, (int)xf, 0, string.Empty,
+				arg, cfg.outHighway))
+			{
+				if (disposex) x.Dispose();
+				trace(ox);
+				return await beamer.Beam(ox.Fragment).ConfigureAwait(false);
+			}
+		}
+
+		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
+			resAPIs.TryAdd(key, (x) =>
+			{
+				if (x != null) f(new Exchange<T>(this, x.Fragment));
+				else f(null);
+			});
+
+		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, f);
+
+		public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _);
+
+		public async Task<IEnumerable<string>> GetRemoteAPIList()
+		{
+			var ox = new Exchange(this, 0, 0, 0, API_LIST, default, cfg.outHighway);
+			var ix = await Request<List<string>>(ox.ResID).ConfigureAwait(false);
+
+			if (ix.IsOK) remoteAPI = ix.Arg;
+
+			return remoteAPI;
+		}
+
+		internal int nextExchangeID() => Interlocked.Increment(ref exchangeID);
 
 		void onReceive(MemoryFragment f)
 		{
@@ -297,7 +273,6 @@ namespace brays
 		public const string API_LIST = "list-API";
 
 		RayBeamer beamer;
-		XPUState state;
 		XCfg cfg;
 		Log log;
 		Task cleanupTask;
@@ -306,8 +281,7 @@ namespace brays
 		ConcurrentDictionary<string, Action<Exchange>> resAPIs;
 		ConcurrentDictionary<int, ExchangeAwait> refAwaits;
 
-		int isDisposed;
 		int exchangeID;
-		int stop;
+		int isDisposed;
 	}
 }

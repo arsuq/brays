@@ -23,23 +23,13 @@ namespace brays.tests
 			{
 				var d = new Dummy();
 
-				var bs = d.Serialize(SerializationType.Binary, hw);
-				var bd = bs.Deserialize<Dummy>(SerializationType.Binary);
+				var bs = d.Serialize(hw);
+				var bd = bs.Deserialize<Dummy>();
 
 				if (!Assert.SameValues(d, bd, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))
 				{
 					Passed = false;
 					FailureMessage = "Binary serialization mismatch.";
-					return;
-				}
-
-				var js = d.Serialize(SerializationType.Json, hw);
-				var jd = js.Deserialize<Dummy>(SerializationType.Json);
-
-				if (!Assert.SameValues(d, bd, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))
-				{
-					Passed = false;
-					FailureMessage = "Json serialization mismatch.";
 					return;
 				}
 

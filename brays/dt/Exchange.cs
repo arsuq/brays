@@ -22,7 +22,6 @@ namespace brays
 				pos = f.Read(ref ID, pos);
 				pos = f.Read(ref RefID, pos);
 				pos = f.Read(ref Flags, pos);
-				pos = f.Read(ref SrlType, pos);
 				pos = f.Read(ref Created, pos);
 				pos = f.Read(ref ErrorCode, pos);
 				pos = f.Read(ref ResIDLen, pos);
@@ -34,10 +33,8 @@ namespace brays
 
 		internal Exchange(
 			XPU xpu,
-			int ID,
 			int refID,
 			int xflags,
-			SerializationType st,
 			int errorCode,
 			string resID,
 			Span<byte> data,
@@ -56,10 +53,9 @@ namespace brays
 
 			var pos = 0;
 
-			this.ID = ID;
+			this.ID = xpu.nextExchangeID();
 			this.RefID = refID;
 			this.Flags = xflags;
-			this.SrlType = (byte)st;
 			this.Created = DateTime.Now.Ticks;
 			this.ErrorCode = errorCode;
 			this.state = (int)XState.Created;
@@ -69,7 +65,6 @@ namespace brays
 			pos = Fragment.Write(ID, pos);
 			pos = Fragment.Write(refID, pos);
 			pos = Fragment.Write((int)xflags, pos);
-			pos = Fragment.Write((byte)st, pos);
 			pos = Fragment.Write(Created, pos);
 			pos = Fragment.Write(errorCode, pos);
 			pos = Fragment.Write(ResIDLen, pos);
@@ -122,19 +117,15 @@ namespace brays
 		public readonly bool IsValid;
 		public Span<byte> Data => Fragment.Span().Slice(DataOffset);
 		public readonly MemoryFragment Fragment;
-		public SerializationType SerializationType => (SerializationType)SrlType;
 		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
 		public XFlags ExchangeFlags => (XFlags)Flags;
 		public XState State => (XState)state;
 
 		public bool IsOK => ErrorCode == 0;
 
-		// [i] These fields could be props reading from the Fragment at offset...
-
 		public readonly int ID;
 		public readonly int RefID;
 		public readonly int Flags;
-		public readonly byte SrlType;
 		public readonly long Created;
 		public readonly int ErrorCode;
 		public readonly ushort ResIDLen;
@@ -147,7 +138,7 @@ namespace brays
 		// Technically this is not mandatory since the Beamer is not shared and all received frags
 		// can only be exchanges. 
 		public const int EXCHANGE_TYPE_ID = 7777777;
-		public const int HEADER_LEN = 31;
+		public const int HEADER_LEN = 30;
 	}
 
 	public class Exchange<T> : IDisposable
@@ -162,29 +153,26 @@ namespace brays
 
 		internal Exchange(
 			XPU xpu,
-			int ID,
 			int refID,
 			int xflags,
-			SerializationType st,
 			int errorCode,
 			string resID,
 			T arg,
 			IMemoryHighway hw)
 		{
-			var f = Serializer.Serialize(arg, st, hw, (ms) =>
+			var f = Serializer.Serialize(arg, hw, (ms) =>
 			{
 				var resBytes = Encoding.UTF8.GetBytes(resID);
 				var resLen = (ushort)resBytes.Length;
 				Span<byte> header = stackalloc byte[Exchange.HEADER_LEN + resLen];
 
 				BitConverter.TryWriteBytes(header, Exchange.EXCHANGE_TYPE_ID);
-				BitConverter.TryWriteBytes(header.Slice(4), ID);
+				BitConverter.TryWriteBytes(header.Slice(4), xpu.nextExchangeID());
 				BitConverter.TryWriteBytes(header.Slice(8), refID);
 				BitConverter.TryWriteBytes(header.Slice(12), xflags);
-				BitConverter.TryWriteBytes(header.Slice(16), (byte)st);
-				BitConverter.TryWriteBytes(header.Slice(17), DateTime.Now.Ticks);
-				BitConverter.TryWriteBytes(header.Slice(25), errorCode);
-				BitConverter.TryWriteBytes(header.Slice(29), resLen);
+				BitConverter.TryWriteBytes(header.Slice(16), DateTime.Now.Ticks);
+				BitConverter.TryWriteBytes(header.Slice(24), errorCode);
+				BitConverter.TryWriteBytes(header.Slice(28), resLen);
 
 				resBytes.CopyTo(header.Slice(Exchange.HEADER_LEN));
 				ms.Write(header);
@@ -197,6 +185,8 @@ namespace brays
 		internal Exchange(int errorCode) => Instance = new Exchange(errorCode);
 
 		public void Dispose() => Instance?.Dispose();
+
+		public static implicit operator Exchange(Exchange<T> gx) => gx != null ? gx.Instance : null;
 
 		public bool IsOK => Instance != null && Instance.IsOK;
 		public readonly Exchange Instance;
