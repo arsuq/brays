@@ -7,9 +7,9 @@ using TestSurface;
 
 namespace brays.tests
 {
-	class XPUSurf : ITestSurface
+	class SimpleExchange : ITestSurface
 	{
-		public string Info => "Tests the XPU class.";
+		public string Info => "Tests the basic request reply.";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }

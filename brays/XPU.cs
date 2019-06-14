@@ -213,7 +213,9 @@ namespace brays
 
 			if (x.RefID > 0)
 			{
-				if (refAwaits.TryGetValue(x.RefID, out ExchangeAwait xa))
+				// [i] The refAwaits should be handled only once.
+
+				if (refAwaits.TryRemove(x.RefID, out ExchangeAwait xa))
 				{
 					x.MarkAsProcessing();
 					xa.OnReferred(x);
