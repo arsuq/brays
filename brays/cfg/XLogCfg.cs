@@ -6,7 +6,9 @@ namespace brays
 	public class XLogCfg
 	{
 		public XLogCfg(
-			string filePath, bool enabled, XFlags flags = (XFlags)((1 << 17) - 1),
+			string filePath, bool enabled,
+			XFlags flags = (XFlags)((1 << 17) - 1),
+			XState state = (XState)((1 << 7) - 1),
 			string ext = "bx", int rotSizeKb = 500)
 		{
 			LogFilePath = filePath;
@@ -14,6 +16,7 @@ namespace brays
 			Ext = ext;
 			RotationLogFileKB = rotSizeKb;
 			Flags = flags;
+			State = state;
 		}
 
 		/// <summary>
@@ -22,7 +25,7 @@ namespace brays
 		public bool RotateLogAtStart = true;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool IsOn(XFlags f) => (f & Flags) == f && IsEnabled;
+		public bool IsOn(XFlags f, XState s) => (f & Flags) == f && (s & State) == s && IsEnabled;
 
 		/// <summary>
 		/// The trace file path.
@@ -48,5 +51,10 @@ namespace brays
 		/// The trace-enabled flags.
 		/// </summary>
 		public XFlags Flags;
+
+		/// <summary>
+		/// The exchange state mask.
+		/// </summary>
+		public XState State;
 	}
 }

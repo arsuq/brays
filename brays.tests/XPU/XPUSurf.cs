@@ -22,26 +22,36 @@ namespace brays.tests
 			var s = new IPEndPoint(IPAddress.Loopback, 3000);
 			var t = new IPEndPoint(IPAddress.Loopback, 4000);
 			var a = new XPU(new XCfg(
-				 new BeamerCfg(),
+				 new BeamerCfg() { Log = new BeamerLogCfg("a") },
 				 new XLogCfg("a", true),
 				 new HeapHighway(ushort.MaxValue)));
 
 			var b = new XPU(new XCfg(
-				 new BeamerCfg(),
+				 new BeamerCfg() { Log = new BeamerLogCfg("b") },
 				 new XLogCfg("b", true),
 				 new HeapHighway(ushort.MaxValue)));
 
-			const string F1 = "f1";
+			const string ADD_ONE = "addOne";
+			const string ADD_ONE_GEN = "addOneGen";
 
 			try
 			{
-				b.RegisterAPI(F1, add_one);
+				b.RegisterAPI(ADD_ONE, add_one);
+				b.RegisterAPI<int>(ADD_ONE_GEN, add_oneg);
 
 				await a.Start(s, t);
 				await b.Start(t, s);
 
-				using (var ix = await a.Request<int, int>(F1, 3))
+				using (var ix = await a.Request<int, int>(ADD_ONE, 3))
 					if (!ix.IsOK || ix.Arg != 4)
+					{
+						Passed = false;
+						FailureMessage = "Exchange failure.";
+						return;
+					}
+
+				using (var ix = await a.Request<int, int>(ADD_ONE_GEN, 8))
+					if (!ix.IsOK || ix.Arg != 9)
 					{
 						Passed = false;
 						FailureMessage = "Exchange failure.";
@@ -66,6 +76,16 @@ namespace brays.tests
 			data++;
 
 			ix.XPU.Reply(ix, data).Wait();
+		}
+
+		void add_oneg(Exchange<int> ix)
+		{
+			var data = ix.Arg;
+			var inst = ix.Instance;
+
+			data++;
+
+			inst.XPU.Reply(inst, data).Wait();
 		}
 	}
 }

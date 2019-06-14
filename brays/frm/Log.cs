@@ -113,7 +113,7 @@ namespace System
 			if (string.IsNullOrEmpty(dir))
 				dir = AppDomain.CurrentDomain.BaseDirectory;
 
-			var F = Directory.GetFiles(dir, $"{Filename}*");
+			var F = Directory.GetFiles(dir, $"{Filename}*{Extension}");
 
 			if (F != null && F.Length > 0)
 			{

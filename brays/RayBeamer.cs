@@ -1042,8 +1042,9 @@ namespace brays
 
 				try
 				{
+#if DEBUG
 					trace("Cleanup", $"Blocks: {blocks.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
-
+#endif
 					foreach (var b in blocks.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
 						{

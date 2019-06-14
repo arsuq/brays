@@ -89,7 +89,7 @@ namespace brays
 		public void Dispose()
 		{
 			Fragment?.Dispose();
-			state = (int)XState.Disposed;
+			Interlocked.Exchange(ref state, (int)XState.Disposed);
 		}
 
 		public T Make<T>() => Serializer.Deserialize<T>(this);
@@ -143,8 +143,8 @@ namespace brays
 
 		public int state;
 
-		// [i] The fragment must begin with a special value to indicate that it is an exchange type.
-		// This is technically not mandatory since the Beamer is not shared and all received frags
+		// [i] The fragment begins with a special value indicating that it is an exchange type.
+		// Technically this is not mandatory since the Beamer is not shared and all received frags
 		// can only be exchanges. 
 		public const int EXCHANGE_TYPE_ID = 7777777;
 		public const int HEADER_LEN = 31;
@@ -152,9 +152,9 @@ namespace brays
 
 	public class Exchange<T> : IDisposable
 	{
-		internal Exchange(XPU xpu, MemoryFragment f)
+		internal Exchange(XPU xpu, MemoryFragment f, bool isCopy = false)
 		{
-			var x = new Exchange(xpu, f);
+			var x = new Exchange(xpu, f, isCopy);
 
 			if (!x.TryDeserialize(out Arg)) Instance = new Exchange((int)XPUErrorCode.Deserialization);
 			else Instance = x;

@@ -46,7 +46,7 @@ namespace brays
 		}
 
 		public async Task<bool> Start(IPEndPoint listen, IPEndPoint target) =>
-			await beamer.LockOn(listen, target);
+			await beamer.LockOn(listen, target).ConfigureAwait(false);
 
 		public void Stop()
 		{
@@ -82,7 +82,6 @@ namespace brays
 			return request<I>(timeoutMS, ox);
 		}
 
-
 		public Task<Exchange<I>> Request<I, O>(string res, O arg,
 			SerializationType st = SerializationType.Binary, int timeoutMS = -1)
 		{
@@ -104,7 +103,7 @@ namespace brays
 			{
 				if (disposex) x.Dispose();
 				trace(ox);
-				return await beamer.Beam(ox.Fragment);
+				return await beamer.Beam(ox.Fragment).ConfigureAwait(false);
 			}
 		}
 
@@ -115,7 +114,7 @@ namespace brays
 				else f(null);
 			});
 
-		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, (x) => { f(x); });
+		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, f);
 
 		public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _);
 
@@ -124,7 +123,7 @@ namespace brays
 			var id = Interlocked.Increment(ref exchangeID);
 			var ox = new Exchange(this, id, 0, 0, SerializationType.Binary, 0, API_LIST, default, cfg.outHighway);
 
-			var ix = await Request<List<string>>(ox.ResID);
+			var ix = await Request<List<string>>(ox.ResID).ConfigureAwait(false);
 			if (ix.IsOK) remoteAPI = ix.Arg;
 
 			return remoteAPI;
@@ -204,7 +203,7 @@ namespace brays
 		void onReceive(MemoryFragment f)
 		{
 			// [!] The disposing is left to the handlers,
-			// so that async work wouldn't require a frag copy.
+			// so that async work wouldn't require a fragment copy.
 
 			var x = new Exchange(this, f);
 
@@ -234,7 +233,7 @@ namespace brays
 
 		void listAPIs(Exchange x)
 		{
-			trace(x, API_LIST, string.Empty);
+			trace(x);
 
 			var API = new List<string>(resAPIs.Keys);
 
@@ -245,12 +244,18 @@ namespace brays
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void trace(Exchange x, string title = null, string msg = null)
 		{
-			if (log != null && cfg.log.IsOn(x.ExchangeFlags))
-			{
-				var isIn = (x.State & XState.Received) == XState.Received ? "i" : "o";
+			var state = x.State;
+			var flags = x.ExchangeFlags;
 
-				log.Write(string.Format("{0, 12} {1}: XF: {2} R: {3} EX: {4} RES: {5} {6}",
-					x.ID, isIn, (int)x.ExchangeFlags, x.RefID, x.ErrorCode, x.ResID, title), msg);
+			if (log != null && cfg.log.IsOn(flags, state))
+			{
+				var dir = " ";
+
+				if (state == XState.Received) dir = "i";
+				else if (state == XState.Created || state == XState.Beamed) dir = "o";
+
+				log.Write(string.Format("{0, 12} {1}: R: {2, 12} F: {3} E: {4} S: {5, -10} RES: {6} {7}",
+					x.ID, dir, x.RefID, (int)flags, x.ErrorCode, state, x.ResID, title), msg);
 			}
 		}
 
@@ -271,8 +276,9 @@ namespace brays
 
 				try
 				{
+#if DEBUG
 					trace("Cleanup", string.Empty);
-
+#endif
 					foreach (var ra in refAwaits)
 						if (ra.Value.OnReferred != null && DateTime.Now.Subtract(ra.Value.Created) > cfg.RepliesTTL)
 							refAwaits.TryRemove(ra.Key, out ExchangeAwait _);
