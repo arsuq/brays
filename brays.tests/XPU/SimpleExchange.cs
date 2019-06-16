@@ -84,12 +84,10 @@ namespace brays.tests
 
 		void add_oneg(Exchange<int> ix)
 		{
-			var data = ix.Arg;
-			var inst = ix.Instance;
+			// Implicit cast as T
+			int v = ix;
 
-			data++;
-
-			inst.XPU.Reply(inst, data).Wait();
+			ix.Instance.Reply(++v).Wait();
 		}
 	}
 }

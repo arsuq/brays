@@ -1144,6 +1144,9 @@ namespace brays
 
 		void trace(TraceOps op, int frame, string title, string msg = null)
 		{
+			// [!!] DO NOT CHANGE THE FORMAT OFFSETS
+			// The logmerge tool relies on hard-coded positions to parse the log lines.
+
 			string ttl = string.Empty;
 			switch (op)
 			{
@@ -1152,10 +1155,10 @@ namespace brays
 				case TraceOps.Signal:
 				case TraceOps.Tile:
 				case TraceOps.AutoPulse:
-				ttl = string.Format("{0,10}:o {1, -12} {2}", frame, op, title);
+				ttl = string.Format("{0,11}:o {1, -12} {2}", frame, op, title);
 				break;
 				case TraceOps.ReqTiles:
-				ttl = string.Format("{0,-12} {1, -12} {2}", " ", op, title);
+				ttl = string.Format("{0,-13} {1, -12} {2}", " ", op, title);
 				break;
 				case TraceOps.ProcBlock:
 				case TraceOps.ProcError:
@@ -1163,11 +1166,11 @@ namespace brays
 				case TraceOps.ProcSignal:
 				case TraceOps.ProcTile:
 				case TraceOps.ProcPulse:
-				ttl = string.Format("{0,10}:i {1, -12} {2}", frame, op, title);
+				ttl = string.Format("{0,11}:i {1, -12} {2}", frame, op, title);
 				break;
 #if DEBUG
 				case TraceOps.DropFrame:
-				ttl = string.Format("{0,10}:i {1, -12} {2}", frame, op, title);
+				ttl = string.Format("{0,11}:i {1, -12} {2}", frame, op, title);
 				break;
 #endif
 				case TraceOps.None:
@@ -1186,7 +1189,7 @@ namespace brays
 		{
 			if (log != null && Volatile.Read(ref cfg.Log.IsEnabled))
 			{
-				var s = string.Format("{0,-12} {1, -12} {2}", " ", op, title);
+				var s = string.Format("{0,-13} {1, -12} {2}", " ", op, title);
 				log.Write(s, msg);
 				if (cfg.Log.OnTrace != null)
 					try { cfg.Log.OnTrace(TraceOps.None, s, msg); }

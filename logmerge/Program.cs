@@ -17,13 +17,12 @@ namespace logmerge
 				Console.WriteLine("Missing one or both file paths.");
 				Console.ForegroundColor = ConsoleColor.Yellow;
 				Console.WriteLine();
-				Console.WriteLine(" Pass two brays log file paths to merge them as follows:");
-				Console.WriteLine(" The first (source) will be interleaved with the received traces in the second (remote) log. ");
-				Console.WriteLine(" The source file will not be reordered but augmented with the :i lines appended after the ");
-				Console.WriteLine(" corresponding frameID :o source trace line. ");
-				Console.WriteLine(" The result trace order helps tracking exchanges from sender's point of view, ");
-				Console.WriteLine(" so one may need to apply the reverse merge as well. ");
+				Console.WriteLine(" > Pass two brays log file paths to merge the received traces from the second log. ");
+				Console.WriteLine(" > Pass two bx    log file paths to merge the replies from the second log with the first one.");
 				Console.WriteLine($" The output will be saved as the source file with the {SAVEAS_SUFFIX} suffix.");
+				Console.WriteLine(" The result trace order helps tracking exchanges from the sender's point of view, ");
+				Console.WriteLine(" so one may need to apply the reverse merge as well. ");
+
 				Console.WriteLine();
 				Console.ForegroundColor = fc;
 
@@ -38,6 +37,9 @@ namespace logmerge
 
 			if (!File.Exists(log1)) throw new Exception($"{log1} file not found.");
 			if (!File.Exists(log2)) throw new Exception($"{log2} file not found.");
+			if (fi1.Extension != fi2.Extension) throw new Exception("The files are not of the same type.");
+
+			var isBX = fi1.Extension == BX_EXT;
 
 			Console.WriteLine($"Will merge {log2} as replies to {log1} as main.");
 
@@ -46,27 +48,42 @@ namespace logmerge
 				var aLines = new List<string>(File.ReadAllLines(log1));
 				var bLines = new List<string>(File.ReadAllLines(log2));
 
-				// Lists because the clones have the same frame IDs.
+				// Lists because the clones (brays) have the same frame IDs.
 				var bIndex = new Dictionary<int, List<string>>();
 
 				foreach (var l in bLines)
 				{
 					var line = parseLine(l);
+					var id = 0;
 
-					// Take only the INs
-					if (line.Direction == FrameDirection.In)
+					if (isBX)
 					{
-						if (!bIndex.ContainsKey(line.FrameID))
-							bIndex.Add(line.FrameID, new List<string>());
+						// Take the replies only
 
-						bIndex[line.FrameID].Add(line.OriginalText);
+						if (line.Direction == FrameDirection.Out &&
+						   (int.TryParse(line.OriginalText.Substring(BX_REFID_POS, ID_LEN), out int refid)))
+							id = refid;
+						else continue;
 					}
+					else if (line.Direction == FrameDirection.In) id = line.FrameID;
+					else continue;
+
+					if (!bIndex.ContainsKey(id)) bIndex.Add(id, new List<string>());
+
+					bIndex[id].Add(line.OriginalText);
+
 				}
 
 				var sb = new StringBuilder();
 
-				sb.AppendLine($"Merge of the received frames in {fi2.Name} (remote) interleaved with the {fi1.Name} (source) log.");
-				sb.AppendLine($"Only :i traces are taken from the remote log (marked with :r).");
+				if (isBX) sb.AppendLine($"# Merge of the {fi1.Name} log file and the replies from {fi2.Name}.");
+				else
+				{
+					sb.AppendLine(
+						$"# Merge of the received frames in {fi2.Name} " +
+						$"(remote) interleaved with the {fi1.Name} (source) log.");
+					sb.AppendLine($"# Only :i traces are taken from the remote log (marked with :r).");
+				}
 
 				foreach (var l in aLines)
 				{
@@ -102,8 +119,8 @@ namespace logmerge
 			l.Direction = FrameDirection.LocalTrace;
 			l.OriginalText = line;
 
-			if (line.Length > FRAME_ID_START_POS + FRAME_ID_LEN &&
-				int.TryParse(line.Substring(FRAME_ID_START_POS, FRAME_ID_LEN), out l.FrameID))
+			if (line.Length > FRAME_ID_START_POS + ID_LEN &&
+				int.TryParse(line.Substring(FRAME_ID_START_POS, ID_LEN), out l.FrameID))
 			{
 
 				var dc = line[FRAME_DIRECTION_POS];
@@ -114,13 +131,15 @@ namespace logmerge
 			return l;
 		}
 
-		const int FRAME_ID_START_POS = 21;
-		const int FRAME_ID_LEN = 10;
-		const int FRAME_DIRECTION_POS = 32;
+		const int FRAME_ID_START_POS = 19;
+		const int ID_LEN = 11;
+		const int FRAME_DIRECTION_POS = 31;
+		const int BX_REFID_POS = 35;
 		const char DIRECTION_IN = 'i';
 		const char DIRECTION_OUT = 'o';
 		const char DIRECTION_REMOTE = 'r';
 		const string SAVEAS_SUFFIX = "-wrem";
+		const string BX_EXT = ".bx";
 
 	}
 

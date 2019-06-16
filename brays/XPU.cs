@@ -142,15 +142,24 @@ namespace brays
 		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
 		{
 			var xf = XFlags.IsReply | XFlags.InArg;
+			var r = false;
 
 			using (Exchange ox = new Exchange<T>(this,
 				x.ID, (int)xf, 0, string.Empty,
 				arg, cfg.outHighway))
 			{
 				if (disposex) x.Dispose();
-				trace(ox);
-				return await beamer.Beam(ox.Fragment).ConfigureAwait(false);
+
+				if (await beamer.Beam(ox.Fragment).ConfigureAwait(false))
+				{
+					ox.MarkAsBeamed();
+					trace(ox);
+					r = true;
+				}
+				else trace("Ex", "Failed to beam a reply");
 			}
+
+			return r;
 		}
 
 		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
@@ -222,6 +231,9 @@ namespace brays
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void trace(Exchange x, string title = null, string msg = null)
 		{
+			// [!!] DO NOT CHANGE THE FORMAT OFFSETS
+			// The logmerge tool relies on hard-coded positions to parse the log lines.
+
 			var state = x.State;
 			var flags = x.ExchangeFlags;
 
@@ -232,7 +244,7 @@ namespace brays
 				if (state == XState.Received) dir = "i";
 				else if (state == XState.Created || state == XState.Beamed) dir = "o";
 
-				log.Write(string.Format("{0, 12} {1}: R: {2, 12} F: {3} E: {4} S: {5, -10} RES: {6} {7}",
+				log.Write(string.Format("{0, 11}:{1} @{2, 11} F: {3} E: {4} S: {5, -10} RES: {6} {7}",
 					x.ID, dir, x.RefID, (int)flags, x.ErrorCode, state, x.ResID, title), msg);
 			}
 		}
@@ -241,7 +253,7 @@ namespace brays
 		internal void trace(string op, string title = null, string msg = null)
 		{
 			if (log != null && Volatile.Read(ref cfg.log.IsEnabled))
-				log.Write(string.Format("{0,-14} {1} {2}", " ", op, title), msg);
+				log.Write(string.Format("{0,13} {1} {2}", " ", op, title), msg);
 		}
 
 		async Task cleanup()

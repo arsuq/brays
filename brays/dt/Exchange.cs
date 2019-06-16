@@ -187,6 +187,7 @@ namespace brays
 		public void Dispose() => Instance?.Dispose();
 
 		public static implicit operator Exchange(Exchange<T> gx) => gx != null ? gx.Instance : null;
+		public static implicit operator T(Exchange<T> gx) => gx != null ? gx.Arg : default;
 
 		public bool IsOK => Instance != null && Instance.IsOK;
 		public readonly Exchange Instance;
