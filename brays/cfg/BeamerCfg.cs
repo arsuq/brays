@@ -66,6 +66,12 @@ namespace brays
 		public bool EnableProbes = false;
 
 		/// <summary>
+		/// If EnableProbes is false, calling probe explicitly will bounce forever.
+		/// After this number of exchanges the probe processing will rest for 1000MS and reset.
+		/// </summary>
+		public int ProbeBounces = 10;
+
+		/// <summary>
 		/// The default value is 4sec.
 		/// </summary>
 		public int ProbeFreqMS = 4000;

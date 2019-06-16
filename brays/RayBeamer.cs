@@ -22,6 +22,7 @@ namespace brays
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
 			tileXHigheay = cfg.TileExchangeHighway;
+			probeBounces = cfg.ProbeBounces;
 
 			if (cfg.Log != null)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB, cfg.Log.RotateLogAtStart);
@@ -58,6 +59,18 @@ namespace brays
 		}
 
 		public void Stop() => Volatile.Write(ref stop, 1);
+
+		public Task<bool> Probe(int awaitMS = 5000)
+		{
+			var tcs = new TaskCompletionSource<bool>();
+
+			if (lockOnGate.IsAcquired) lockOnRst.Wait();
+
+			Task.Run(() => tcs.SetResult(probeBounceAwait.Wait(awaitMS)));
+			socket.Send(probeLead);
+
+			return tcs.Task;
+		}
 
 		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, bool configExchange = false)
 		{
@@ -641,12 +654,19 @@ namespace brays
 		void procProbe()
 		{
 			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
+			probeBounceAwait.Set();
+			probeBounceAwait.Reset();
 
 			if (!cfg.EnableProbes)
 			{
-				if (lockOnGate.IsAcquired) lockOnRst.Wait();
+				if (Interlocked.Decrement(ref probeBounces) < 0)
+					Task.Delay(1000).ContinueWith((_) => Interlocked.Exchange(ref probeBounces, 10));
+				else
+				{
+					if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
-				socket.Send(probeLead);
+					socket.Send(probeLead);
+				}
 			}
 		}
 
@@ -987,6 +1007,7 @@ namespace brays
 				while (Volatile.Read(ref stop) < 1 && Volatile.Read(ref cfg.EnableProbes))
 					try
 					{
+						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 						socket.Send(probeLead);
 						await Task.Delay(cfg.ProbeFreqMS).ConfigureAwait(false);
 					}
@@ -1221,6 +1242,7 @@ namespace brays
 
 		SemaphoreSlim ccBeams;
 		ManualResetEventSlim lockOnRst = new ManualResetEventSlim(true);
+		ManualResetEventSlim probeBounceAwait = new ManualResetEventSlim(true);
 		Gate lockOnGate = new Gate();
 		Task probingTask;
 		Task cleanupTask;
@@ -1242,6 +1264,7 @@ namespace brays
 		MemoryFragment packTile;
 		object packLock = new object();
 		int packTileOffset;
+		int probeBounces;
 
 		public const ushort UDP_MAX = ushort.MaxValue;
 		public const ushort USH_LEN = 2;
