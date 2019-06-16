@@ -22,7 +22,6 @@ namespace brays
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
 			tileXHigheay = cfg.TileExchangeHighway;
-			probeBounces = cfg.ProbeBounces;
 
 			if (cfg.Log != null)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB, cfg.Log.RotateLogAtStart);
@@ -60,16 +59,10 @@ namespace brays
 
 		public void Stop() => Volatile.Write(ref stop, 1);
 
-		public Task<bool> Probe(int awaitMS = 5000)
+		public bool Probe(int awaitMS = 2000)
 		{
-			var tcs = new TaskCompletionSource<bool>();
-
-			if (lockOnGate.IsAcquired) lockOnRst.Wait();
-
-			Task.Run(() => tcs.SetResult(probeBounceAwait.Wait(awaitMS)));
-			socket.Send(probeLead);
-
-			return tcs.Task;
+			socket.Send(probeReqLead);
+			return probeReqAwait.WaitOne(awaitMS);
 		}
 
 		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, bool configExchange = false)
@@ -217,13 +210,14 @@ namespace brays
 
 		public readonly Guid ID;
 		public bool IsStopped => Volatile.Read(ref stop) > 0;
-		public bool IsLocked => isLocked;
+		public bool IsTargetLocked => isLocked;
 		public int FrameCounter => frameCounter;
 		public int ReceivedDgrams => receivedDgrams;
 		public IPEndPoint Target => target;
 		public IPEndPoint Source => source;
 		public DateTime LastProbe => new DateTime(Volatile.Read(ref lastReceivedProbeTick));
 		public CfgX GetTargetConfig() => targetCfg.Clone();
+		public BeamerCfg Config => cfg;
 
 		async Task<int> beam(Block b)
 		{
@@ -654,20 +648,18 @@ namespace brays
 		void procProbe()
 		{
 			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
-			probeBounceAwait.Set();
-			probeBounceAwait.Reset();
+			probeReqAwait.Set();
+			probeReqAwait.Reset();
+		}
 
-			if (!cfg.EnableProbes)
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		void procProbeReq()
+		{
+			try
 			{
-				if (Interlocked.Decrement(ref probeBounces) < 0)
-					Task.Delay(1000).ContinueWith((_) => Interlocked.Exchange(ref probeBounces, 10));
-				else
-				{
-					if (lockOnGate.IsAcquired) lockOnRst.Wait();
-
-					socket.Send(probeLead);
-				}
+				socket.Send(probeLead);
 			}
+			catch { }
 		}
 
 		void procFrame(MemoryFragment f)
@@ -681,6 +673,7 @@ namespace brays
 				switch (lead)
 				{
 					case Lead.Probe: procProbe(); break;
+					case Lead.ProbeReq: procProbeReq(); break;
 					case Lead.Signal: procSignal(f); break;
 					case Lead.Error: procError(f); break;
 					case Lead.Block: procBlock(f); break;
@@ -1219,7 +1212,6 @@ namespace brays
 		}
 
 		Action<MemoryFragment> onReceive;
-
 		HeapHighway outHighway;
 		IMemoryHighway blockHighway;
 		IMemoryHighway tileXHigheay;
@@ -1239,10 +1231,13 @@ namespace brays
 		long lastReceivedProbeTick;
 		long lastReceivedDgramTick;
 		byte[] probeLead = new byte[] { (byte)Lead.Probe };
+		byte[] probeReqLead = new byte[] { (byte)Lead.ProbeReq };
 
 		SemaphoreSlim ccBeams;
+
+		// [!] Don't make this Slim!
+		ManualResetEvent probeReqAwait = new ManualResetEvent(false);
 		ManualResetEventSlim lockOnRst = new ManualResetEventSlim(true);
-		ManualResetEventSlim probeBounceAwait = new ManualResetEventSlim(true);
 		Gate lockOnGate = new Gate();
 		Task probingTask;
 		Task cleanupTask;
@@ -1264,7 +1259,6 @@ namespace brays
 		MemoryFragment packTile;
 		object packLock = new object();
 		int packTileOffset;
-		int probeBounces;
 
 		public const ushort UDP_MAX = ushort.MaxValue;
 		public const ushort USH_LEN = 2;

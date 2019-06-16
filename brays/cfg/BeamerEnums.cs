@@ -6,6 +6,7 @@ namespace brays
 	enum Lead : byte
 	{
 		Probe,
+		ProbeReq,
 		Signal,
 		Error,
 		Block,
