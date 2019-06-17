@@ -27,8 +27,9 @@ namespace brays.tests
 
 			try
 			{
-				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
-				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+				var te = new TestEndpoints(args);
+				var aep = te.Listen;
+				var bep = te.Target;
 
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{

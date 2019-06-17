@@ -18,11 +18,13 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
+			var te = new TestEndpoints(args);
+
 			//await WithCheck();
-			await NoCheck();
+			await NoCheck(te);
 		}
 
-		async Task WithCheck()
+		async Task WithCheck(TestEndpoints te)
 		{
 			Beamer rayA = null;
 			Beamer rayB = null;
@@ -30,8 +32,8 @@ namespace brays.tests
 			try
 			{
 				var done = new ResetEvent(false);
-				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
-				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+				var aep = te.Listen;
+				var bep = te.Target;
 
 				const int BYTES_TO_TRANSFER = 10_000_000;
 				const int MAX_RANDOM_SIZE = 1000;
@@ -143,7 +145,7 @@ namespace brays.tests
 			}
 		}
 
-		async Task NoCheck()
+		async Task NoCheck(TestEndpoints te)
 		{
 			Beamer rayA = null;
 			Beamer rayB = null;
@@ -151,8 +153,8 @@ namespace brays.tests
 			try
 			{
 				var done = new ResetEvent(false);
-				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
-				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+				var aep = te.Listen;
+				var bep = te.Target;
 
 				const int BYTES_TO_TRANSFER = 100_000_000;
 				const int MAX_RANDOM_SIZE = 1000;

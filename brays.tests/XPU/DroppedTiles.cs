@@ -24,6 +24,7 @@ namespace brays.tests
 
 			await Task.Yield();
 
+			var te = new TestEndpoints(args);
 			var arg = new byte[100_000_000];
 
 			void fill()
@@ -39,8 +40,8 @@ namespace brays.tests
 
 			var md5 = MD5.Create().ComputeHash(arg);
 
-			var s = new IPEndPoint(IPAddress.Loopback, 3000);
-			var t = new IPEndPoint(IPAddress.Loopback, 4000);
+			var s = te.Listen;
+			var t = te.Target;
 			var a = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {

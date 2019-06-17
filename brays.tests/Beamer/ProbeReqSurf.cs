@@ -17,18 +17,22 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
+			Beamer a = null;
+			Beamer b = null;
+
 			try
 			{
-				var s = new IPEndPoint(IPAddress.Loopback, 4444);
-				var t = new IPEndPoint(IPAddress.Loopback, 4445);
+				var te = new TestEndpoints(args);
+				var s = te.Listen;
+				var t = te.Target;
 
-				var a = new Beamer((_) => { }, new BeamerCfg()
+				a = new Beamer((_) => { }, new BeamerCfg()
 				{
 					EnableProbes = true,
 					ProbeFreqMS = 400
 				});
 
-				var b = new Beamer((_) => { }, new BeamerCfg()
+				b = new Beamer((_) => { }, new BeamerCfg()
 				{
 					EnableProbes = true,
 					ProbeFreqMS = 100
@@ -105,6 +109,11 @@ namespace brays.tests
 			{
 				Passed = false;
 				FailureMessage = ex.Message;
+			}
+			finally
+			{
+				a.Dispose();
+				b.Dispose();
 			}
 		}
 	}

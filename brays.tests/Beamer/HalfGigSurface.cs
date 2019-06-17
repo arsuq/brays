@@ -17,14 +17,16 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
+			var te = new TestEndpoints(args);
+
 			for (int i = 0; i < 4; i++)
-				await halfGigNoLogNoVerify();
+				await halfGigNoLogNoVerify(te);
 
 			IsComplete = true;
 			Passed = true;
 		}
 
-		async Task halfGigNoLogNoVerify()
+		async Task halfGigNoLogNoVerify(TestEndpoints te)
 		{
 			"[In] halfGigNoLogNoVerify()".AsTestInfo();
 			var started = DateTime.Now;
@@ -42,8 +44,9 @@ namespace brays.tests
 			try
 			{
 				var rst = new ManualResetEvent(false);
-				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
-				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
+				
+				var aep = te.Listen;
+				var bep = te.Target;
 
 				void receive(MemoryFragment f)
 				{
