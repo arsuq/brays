@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using TestSurface;
@@ -30,12 +31,15 @@ namespace brays.tests
 			int totalFragsIn = 0;
 			var rdmSize = new Random();
 
+			// If b is on a remote machine
+			var OVER = 7654321;
+
 			try
 			{
 				var te = new TestEndpoints(args);
 				var rst = new ManualResetEvent(false);
-				var aep = te.Listen;
-				var bep = te.Target;
+				var aep = te.AE;
+				var bep = te.BE;
 
 				void receive(MemoryFragment f)
 				{
@@ -81,62 +85,83 @@ namespace brays.tests
 					}
 				}
 
-				rayA = new Beamer(
-					(f) => { Console.WriteLine("?"); },
-					new BeamerCfg()
+				if (te.A)
+					rayA = new Beamer(
+						(f) =>
+						{
+							// If using a remote, this is equivalent to rst.Set;
+
+							var over = 0;
+							f.Read(ref over, 0);
+
+							if (OVER == over) rst.Set();
+							else
+							{
+								Passed = false;
+								FailureMessage = $"rayA received unknown <over> signal.";
+							}
+						},
+						new BeamerCfg()
+						{
+							Log = new BeamerLogCfg("rayA", true) { OnTrace = null },
+#if DEBUG
+							dropFrames = true,
+							deopFramePercent = 20
+#endif
+						});
+
+				if (te.B)
+					rayB = new Beamer(receive, new BeamerCfg()
 					{
-						Log = new BeamerLogCfg("rayA", true) { OnTrace = null },
+						Log = new BeamerLogCfg("rayB", true) { OnTrace = null },
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 20
 #endif
 					});
 
-
-				rayB = new Beamer(receive, new BeamerCfg()
-				{
-					Log = new BeamerLogCfg("rayB", true) { OnTrace = null },
-#if DEBUG
-					dropFrames = true,
-					deopFramePercent = 20
-#endif
-				});
-
 				using (var hw = new HeapHighway())
 				{
-					var ta = new Task(() =>
+					if (te.A)
 					{
-						rayA.LockOn(aep, bep).Wait();
-
-						while (!rayA.IsStopped)
+						var ta = new Task(async () =>
 						{
-							var len = rdmSize.Next(10, 1_000_000);
-							var f = hw.Alloc(len);
+							rayA.LockOn(aep, bep).Wait();
 
-							for (int i = 0; i < len; i++)
-								f[i] = 43;
+							await rayA.TargetIsActive();
 
-							f.Write(len, 0);
-							rayA.Beam(f).Wait();
+							while (!rayA.IsStopped)
+							{
+								var len = rdmSize.Next(10, 1_000_000);
+								var f = hw.Alloc(len);
 
-							var fo = Interlocked.Increment(ref totalFragsOut);
-							var ts = Interlocked.Add(ref totalSend, len);
+								for (int i = 0; i < len; i++)
+									f[i] = 43;
 
-							string.Format("S: {0, -10} TS: {1, -10} FO: {2, -3}", len, ts, fo).AsInnerInfo();
+								f.Write(len, 0);
+								rayA.Beam(f).Wait();
 
-							if (ts > CAP) break;
-						}
+								var fo = Interlocked.Increment(ref totalFragsOut);
+								var ts = Interlocked.Add(ref totalSend, len);
 
-						$"Out of beaming loop".AsInnerInfo();
-					});
+								string.Format("S: {0, -10} TS: {1, -10} FO: {2, -3}", len, ts, fo).AsInnerInfo();
 
-					var tb = new Task(() =>
+								if (ts > CAP) break;
+							}
+
+							$"Out of beaming loop".AsInnerInfo();
+						});
+
+						ta.Start();
+					}
+
+					if (te.B)
 					{
-						rayB.LockOn(bep, aep).Wait();
-					});
+						var bok = await rayB.LockOn(bep, aep);
 
-					ta.Start();
-					tb.Start();
+						if (!bok.ok) $"Failed to lock on rayA".AsError();
+					}
+
 					if (!rst.WaitOne(new TimeSpan(0, 2, 0)))
 					{
 						Passed = false;
@@ -156,8 +181,8 @@ namespace brays.tests
 			}
 			finally
 			{
-				rayA.Dispose();
-				rayB.Dispose();
+				if (rayA != null) rayA.Dispose();
+				if (rayB != null) rayB.Dispose();
 			}
 		}
 	}

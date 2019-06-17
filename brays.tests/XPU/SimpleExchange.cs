@@ -21,8 +21,8 @@ namespace brays.tests
 
 			var te = new TestEndpoints(args);
 
-			var s = te.Listen;
-			var t = te.Target;
+			var s = te.AE;
+			var t = te.BE;
 			var a = new XPU(new XCfg(
 				 new BeamerCfg() { Log = new BeamerLogCfg("a") },
 				 new XLogCfg("a", true),

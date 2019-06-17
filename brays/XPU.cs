@@ -45,7 +45,7 @@ namespace brays
 				catch { }
 		}
 
-		public async Task<bool> Start(IPEndPoint listen, IPEndPoint target) =>
+		public async Task<(bool, Exception)> Start(IPEndPoint listen, IPEndPoint target) =>
 			await beamer.LockOn(listen, target).ConfigureAwait(false);
 
 		public void Stop()

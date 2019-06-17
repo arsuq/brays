@@ -23,8 +23,8 @@ namespace brays.tests
 			try
 			{
 				var te = new TestEndpoints(args);
-				var s = te.Listen;
-				var t = te.Target;
+				var s = te.AE;
+				var t = te.BE;
 
 				a = new Beamer((_) => { }, new BeamerCfg()
 				{
@@ -89,6 +89,7 @@ namespace brays.tests
 					return;
 				}
 
+
 				"OK: Probe request.".AsSuccess();
 
 				b.Dispose();
@@ -101,6 +102,26 @@ namespace brays.tests
 					Passed = false;
 					return;
 				}
+
+				var data = new byte[] { 87 };
+				var isReceived = false;
+
+				Task.Delay(1500).ContinueWith((_) =>
+				{
+					b = new Beamer((f) => { }, new BeamerCfg());
+					b.LockOn(t, s).Wait();
+				});
+
+				apr = await a.TargetIsActive(8000);
+							   
+				if (!apr)
+				{
+					FailureMessage = "Awaiting for target to become active with a probe failed!";
+					Passed = false;
+					return;
+				}
+
+				"OK: Awaiting for target to become active with a probe.".AsSuccess();
 
 				Passed = true;
 				IsComplete = true;

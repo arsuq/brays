@@ -10,7 +10,7 @@ namespace brays.tests
 {
 	class PulseSurface : ITestSurface
 	{
-		public string Info => "Test the RayEmitter small data packing into dgrams.";
+		public string Info => "Test the Beamer small data packing into dgrams.";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
@@ -32,8 +32,8 @@ namespace brays.tests
 			try
 			{
 				var done = new ResetEvent(false);
-				var aep = te.Listen;
-				var bep = te.Target;
+				var aep = te.AE;
+				var bep = te.BE;
 
 				const int BYTES_TO_TRANSFER = 10_000_000;
 				const int MAX_RANDOM_SIZE = 1000;
@@ -153,8 +153,8 @@ namespace brays.tests
 			try
 			{
 				var done = new ResetEvent(false);
-				var aep = te.Listen;
-				var bep = te.Target;
+				var aep = te.AE;
+				var bep = te.BE;
 
 				const int BYTES_TO_TRANSFER = 100_000_000;
 				const int MAX_RANDOM_SIZE = 1000;

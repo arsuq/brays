@@ -65,7 +65,30 @@ namespace brays
 			return probeReqAwait.WaitOne(awaitMS);
 		}
 
-		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, bool configExchange = false)
+		public Task<bool> TargetIsActive(int awaitMS = -1)
+		{
+			var tcs = new TaskCompletionSource<bool>();
+
+			Task.Run(async () =>
+			{
+				try
+				{
+					while (!tcs.Task.IsCompleted)
+					{
+						socket.Send(probeReqLead);
+						await Task.Delay(cfg.ProbeFreqMS).ConfigureAwait(false);
+					}
+				}
+				catch(Exception ex) {  }
+			});
+
+			ThreadPool.RegisterWaitForSingleObject(probeReqAwait,
+				(sm, to) => tcs.TrySetResult(!to), null, awaitMS, true);
+
+			return tcs.Task;
+		}
+
+		public async Task<(bool ok, Exception ex)> LockOn(IPEndPoint listen, IPEndPoint target, bool configExchange = false)
 		{
 			if (lockOnGate.Enter())
 				try
@@ -103,7 +126,7 @@ namespace brays
 						if (!await ConfigExchange(0, true))
 						{
 							Volatile.Write(ref stop, 1);
-							return false;
+							return (false, null);
 						}
 
 						if (targetCfg.TileSizeBytes < cfg.TileSizeBytes)
@@ -119,19 +142,20 @@ namespace brays
 					Volatile.Write(ref isLocked, true);
 
 					trace("Lock-on", $"{source.ToString()} target: {target.ToString()}");
-					return true;
+					return (true, null);
 				}
 				catch (Exception ex)
 				{
 					if (!lockOnRst.IsSet) lockOnRst.Set();
 					trace("Ex", "LockOn", ex.ToString());
+					return (false, ex);
 				}
 				finally
 				{
 					lockOnGate.Exit();
 				}
 
-			return false;
+			return (false, null);
 		}
 
 		public async Task<bool> ConfigExchange(int refID = 0, bool awaitRemote = false)

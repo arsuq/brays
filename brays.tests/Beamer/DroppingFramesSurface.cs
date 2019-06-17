@@ -29,8 +29,8 @@ namespace brays.tests
 			{
 				var te = new TestEndpoints(args);
 				var rst = new ManualResetEvent(false);
-				var aep = te.Listen;
-				var bep = te.Target;
+				var aep = te.AE;
+				var bep = te.BE;
 
 				rayA = new Beamer(
 					(f) => { Console.WriteLine("?"); },

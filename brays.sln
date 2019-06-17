@@ -7,33 +7,54 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "brays", "brays\brays.csproj
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "brays.tests", "brays.tests\brays.tests.csproj", "{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "logmerge", "logmerge\logmerge.csproj", "{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "logmerge", "logmerge\logmerge.csproj", "{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Assert|Any CPU = Assert|Any CPU
+		Assert|x64 = Assert|x64
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Assert|Any CPU.ActiveCfg = Assert|Any CPU
 		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Assert|Any CPU.Build.0 = Assert|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Assert|x64.ActiveCfg = Assert|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Assert|x64.Build.0 = Assert|Any CPU
 		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Debug|x64.Build.0 = Debug|Any CPU
 		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Release|x64.ActiveCfg = Release|Any CPU
+		{10558DC2-23E8-4AA6-8703-26C6431656DC}.Release|x64.Build.0 = Release|Any CPU
 		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Assert|Any CPU.ActiveCfg = Assert|Any CPU
 		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Assert|Any CPU.Build.0 = Assert|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Assert|x64.ActiveCfg = Assert|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Assert|x64.Build.0 = Assert|Any CPU
 		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Debug|x64.Build.0 = Debug|Any CPU
 		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Release|x64.ActiveCfg = Release|Any CPU
+		{03C2EBC7-EC9D-4AEE-86F5-288F9D6DF349}.Release|x64.Build.0 = Release|Any CPU
 		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Assert|Any CPU.ActiveCfg = Debug|Any CPU
 		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Assert|Any CPU.Build.0 = Debug|Any CPU
+		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Assert|x64.ActiveCfg = Release|Any CPU
+		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Assert|x64.Build.0 = Release|Any CPU
 		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Debug|x64.Build.0 = Debug|Any CPU
 		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Release|x64.ActiveCfg = Release|Any CPU
+		{5AD6D254-1B58-4A1F-A3F3-C686BF654AAB}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

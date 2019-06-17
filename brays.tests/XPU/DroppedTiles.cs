@@ -40,8 +40,8 @@ namespace brays.tests
 
 			var md5 = MD5.Create().ComputeHash(arg);
 
-			var s = te.Listen;
-			var t = te.Target;
+			var s = te.AE;
+			var t = te.BE;
 			var a = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {

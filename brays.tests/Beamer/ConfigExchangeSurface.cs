@@ -28,8 +28,8 @@ namespace brays.tests
 			try
 			{
 				var te = new TestEndpoints(args);
-				var aep = te.Listen;
-				var bep = te.Target;
+				var aep = te.AE;
+				var bep = te.BE;
 
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
@@ -53,7 +53,7 @@ namespace brays.tests
 
 				var ta = new Task(() =>
 				{
-					if (rayA.LockOn(aep, bep, true).Result)
+					if (rayA.LockOn(aep, bep, true).Result.ok)
 					{
 						// The remote config must be available here
 						var tc = rayA.GetTargetConfig();
@@ -68,7 +68,7 @@ namespace brays.tests
 
 				var tb = new Task(() =>
 				{
-					if (rayB.LockOn(bep, aep, true).Result)
+					if (rayB.LockOn(bep, aep, true).Result.ok)
 					{
 						var tc = rayB.GetTargetConfig();
 						if (tc == null || tc.MaxBeamedTilesAtOnce != CFGA)

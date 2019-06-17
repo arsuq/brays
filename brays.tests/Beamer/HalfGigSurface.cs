@@ -45,8 +45,8 @@ namespace brays.tests
 			{
 				var rst = new ManualResetEvent(false);
 				
-				var aep = te.Listen;
-				var bep = te.Target;
+				var aep = te.AE;
+				var bep = te.BE;
 
 				void receive(MemoryFragment f)
 				{
