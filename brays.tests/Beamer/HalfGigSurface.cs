@@ -29,8 +29,8 @@ namespace brays.tests
 			"[In] halfGigNoLogNoVerify()".AsTestInfo();
 			var started = DateTime.Now;
 
-			RayBeamer rayA = null;
-			RayBeamer rayB = null;
+			Beamer rayA = null;
+			Beamer rayB = null;
 
 			const int CAP = 500_000_000;
 			int totalSend = 0;
@@ -92,12 +92,12 @@ namespace brays.tests
 
 				var traceops = (TraceOps.ReqTiles | TraceOps.Tile | TraceOps.ProcTile);
 
-				rayA = new RayBeamer((f) => { }, new BeamerCfg()
+				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
 					//Log = new LogCfg("rayA", true, traceops),
 					TileSizeBytes = 60000
 				});
-				rayB = new RayBeamer(receive, new BeamerCfg()
+				rayB = new Beamer(receive, new BeamerCfg()
 				{
 					Log = new BeamerLogCfg("rayB", true, traceops),
 					TileSizeBytes = 60000

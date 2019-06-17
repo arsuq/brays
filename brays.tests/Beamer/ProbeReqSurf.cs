@@ -22,13 +22,13 @@ namespace brays.tests
 				var s = new IPEndPoint(IPAddress.Loopback, 4444);
 				var t = new IPEndPoint(IPAddress.Loopback, 4445);
 
-				var a = new RayBeamer((_) => { }, new BeamerCfg()
+				var a = new Beamer((_) => { }, new BeamerCfg()
 				{
 					EnableProbes = true,
 					ProbeFreqMS = 400
 				});
 
-				var b = new RayBeamer((_) => { }, new BeamerCfg()
+				var b = new Beamer((_) => { }, new BeamerCfg()
 				{
 					EnableProbes = true,
 					ProbeFreqMS = 100

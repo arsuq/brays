@@ -24,8 +24,8 @@ namespace brays.tests
 
 		async Task WithCheck()
 		{
-			RayBeamer rayA = null;
-			RayBeamer rayB = null;
+			Beamer rayA = null;
+			Beamer rayB = null;
 
 			try
 			{
@@ -38,11 +38,11 @@ namespace brays.tests
 				int totalSent = 0;
 				int totalReceived = 0;
 
-				rayA = new RayBeamer(
+				rayA = new Beamer(
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg() { Log = new BeamerLogCfg("rayA", false) });
 
-				rayB = new RayBeamer((f) =>
+				rayB = new Beamer((f) =>
 				{
 					try
 					{
@@ -145,8 +145,8 @@ namespace brays.tests
 
 		async Task NoCheck()
 		{
-			RayBeamer rayA = null;
-			RayBeamer rayB = null;
+			Beamer rayA = null;
+			Beamer rayB = null;
 
 			try
 			{
@@ -159,9 +159,9 @@ namespace brays.tests
 				int totalSent = 0;
 				int totalReceived = 0;
 
-				rayA = new RayBeamer((f) => { }, new BeamerCfg() { Log = new BeamerLogCfg("rayA", true) });
+				rayA = new Beamer((f) => { }, new BeamerCfg() { Log = new BeamerLogCfg("rayA", true) });
 
-				rayB = new RayBeamer((f) =>
+				rayB = new Beamer((f) =>
 				{
 					try
 					{

@@ -20,8 +20,8 @@ namespace brays.tests
 #if !DEBUG
 			return;
 #endif
-			RayBeamer rayA = null;
-			RayBeamer rayB = null;
+			Beamer rayA = null;
+			Beamer rayB = null;
 
 			const int CAP = 30_000_000;
 			int totalSend = 0;
@@ -80,7 +80,7 @@ namespace brays.tests
 					}
 				}
 
-				rayA = new RayBeamer(
+				rayA = new Beamer(
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
@@ -92,7 +92,7 @@ namespace brays.tests
 					});
 
 
-				rayB = new RayBeamer(receive, new BeamerCfg()
+				rayB = new Beamer(receive, new BeamerCfg()
 				{
 					Log = new BeamerLogCfg("rayB", true) { OnTrace = null },
 #if DEBUG

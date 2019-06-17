@@ -16,7 +16,7 @@ namespace brays
 		public XPU(XCfg cfg)
 		{
 			this.cfg = cfg;
-			this.beamer = new RayBeamer(onReceive, cfg.bcfg);
+			this.beamer = new Beamer(onReceive, cfg.bcfg);
 			resAPIs = new ConcurrentDictionary<string, Action<Exchange>>();
 			refAwaits = new ConcurrentDictionary<int, ExchangeAwait>();
 
@@ -284,7 +284,7 @@ namespace brays
 
 		public const string API_LIST = "list-API";
 
-		RayBeamer beamer;
+		Beamer beamer;
 		XCfg cfg;
 		Log log;
 		Task cleanupTask;

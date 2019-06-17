@@ -10,9 +10,9 @@ using System.Threading.Tasks;
 
 namespace brays
 {
-	public class RayBeamer : IDisposable
+	public class Beamer : IDisposable
 	{
-		public RayBeamer(Action<MemoryFragment> onReceive, BeamerCfg cfg)
+		public Beamer(Action<MemoryFragment> onReceive, BeamerCfg cfg)
 		{
 			if (onReceive == null || cfg == null) throw new ArgumentNullException();
 

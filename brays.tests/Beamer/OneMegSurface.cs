@@ -17,8 +17,8 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
-			RayBeamer rayA = null;
-			RayBeamer rayB = null;
+			Beamer rayA = null;
+			Beamer rayB = null;
 
 			const int MEG = 1_000_000;
 
@@ -27,10 +27,10 @@ namespace brays.tests
 				var rst = new ManualResetEvent(false);
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
-				rayA = new RayBeamer(
+				rayA = new Beamer(
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg() { Log = new BeamerLogCfg("rayA", true) });
-				rayB = new RayBeamer((f) =>
+				rayB = new Beamer((f) =>
 				{
 					try
 					{

@@ -19,8 +19,8 @@ namespace brays.tests
 #if !DEBUG
 			return;
 #endif
-			RayBeamer rayA = null;
-			RayBeamer rayB = null;
+			Beamer rayA = null;
+			Beamer rayB = null;
 
 			const int CFGA = 11;
 			const int CFGB = 12;
@@ -30,7 +30,7 @@ namespace brays.tests
 				var aep = new IPEndPoint(IPAddress.Loopback, 3000);
 				var bep = new IPEndPoint(IPAddress.Loopback, 4000);
 
-				rayA = new RayBeamer((f) => { }, new BeamerCfg()
+				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
 					Log = new BeamerLogCfg("rayA", true),
 					MaxBeamedTilesAtOnce = CFGA
@@ -40,7 +40,7 @@ namespace brays.tests
 #endif
 				});
 
-				rayB = new RayBeamer((f) => { }, new BeamerCfg()
+				rayB = new Beamer((f) => { }, new BeamerCfg()
 				{
 					Log = new BeamerLogCfg("rayB", true),
 					MaxBeamedTilesAtOnce = CFGB

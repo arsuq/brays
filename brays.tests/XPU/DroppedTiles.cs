@@ -42,12 +42,26 @@ namespace brays.tests
 			var s = new IPEndPoint(IPAddress.Loopback, 3000);
 			var t = new IPEndPoint(IPAddress.Loopback, 4000);
 			var a = new XPU(new XCfg(
-				 new BeamerCfg() { Log = new BeamerLogCfg("a"), dropFrames = true, deopFramePercent = 20 },
+				 new BeamerCfg()
+				 {
+					 Log = new BeamerLogCfg("a")
+#if DEBUG
+					 ,dropFrames = true,
+					 deopFramePercent = 20
+#endif
+				 },
 				 new XLogCfg("a", true),
 				 new HeapHighway(ushort.MaxValue)));
 
 			var b = new XPU(new XCfg(
-				 new BeamerCfg() { Log = new BeamerLogCfg("b"), dropFrames = true, deopFramePercent = 20 },
+				 new BeamerCfg()
+				 {
+					 Log = new BeamerLogCfg("b")
+#if DEBUG
+					 ,dropFrames = true,
+					 deopFramePercent = 20
+#endif
+				 },
 				 new XLogCfg("b", true),
 				 new HeapHighway(ushort.MaxValue)));
 
