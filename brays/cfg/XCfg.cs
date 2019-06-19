@@ -4,11 +4,14 @@ namespace brays
 {
 	public class XCfg
 	{
-		public XCfg(BeamerCfg bcfg, XLogCfg log, IMemoryHighway hw)
+		/// <param name="outHighway">The memory highway, used for sending tiles. 
+		/// If null, a HeapHighway with default capacity of 65KB is used.</param>
+		public XCfg(BeamerCfg bcfg, XLogCfg log, IMemoryHighway outHighway)
 		{
 			this.bcfg = bcfg;
 			this.log = log;
-			outHighway = hw != null ? hw : new HeapHighway();
+			this.outHighway = outHighway != null ? outHighway :
+				new HeapHighway(new HighwaySettings(Beamer.UDP_MAX), Beamer.UDP_MAX);
 		}
 
 		/// <summary>

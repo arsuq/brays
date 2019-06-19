@@ -48,7 +48,7 @@ namespace brays.tests
 					if (!ix.IsOK || ix.Arg != 4)
 					{
 						Passed = false;
-						FailureMessage = "Exchange failure.";
+						FailureMessage = "Request failure.";
 						return;
 					}
 
@@ -56,9 +56,22 @@ namespace brays.tests
 					if (!ix.IsOK || ix.Arg != 9)
 					{
 						Passed = false;
-						FailureMessage = "Exchange failure.";
+						FailureMessage = "Request failure.";
 						return;
 					}
+
+				using (var ix = await a.Trigger(ADD_ONE, 3))
+				{
+					var q = ix.Make<int>();
+
+					if (!ix.IsOK)
+					{
+						Passed = false;
+						FailureMessage = "Trigger failure.";
+						return;
+					}
+				}
+
 
 				Passed = true;
 				IsComplete = true;

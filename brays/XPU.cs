@@ -40,7 +40,8 @@ namespace brays
 			if (Interlocked.CompareExchange(ref isDisposed, 1, 0) == 0)
 				try
 				{
-					beamer.Dispose();
+					beamer?.Dispose();
+					cfg?.outHighway?.Dispose();
 				}
 				catch { }
 		}
@@ -125,19 +126,23 @@ namespace brays
 			return tc.Task;
 		}
 
-		public Task<Exchange> Trigger(string res, int timeoutMS = -1) =>
-			 Trigger(new Exchange(this, 0, 0, 0, res, default, cfg.outHighway), timeoutMS);
+		public Task<Exchange> Trigger(string res, TimeSpan timeout = default) =>
+			 Trigger(new Exchange(this, 0, 0, 0, res, default, cfg.outHighway),
+				 timeout != default ? (int)timeout.TotalMilliseconds : -1);
 
-		public Task<Exchange> Trigger<O>(string res, O arg, int timeoutMS = -1) =>
-			 Trigger(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway), timeoutMS);
+		public Task<Exchange> Trigger<O>(string res, O arg, TimeSpan timeout = default) =>
+			 Trigger(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway),
+				 timeout != default ? (int)timeout.TotalMilliseconds : -1);
 
-		public Task<Exchange<I>> Request<I>(string res, int timeoutMS = -1) =>
-			 Request<I>(new Exchange(this, 0, (int)XFlags.OutArg, 0, res, default, cfg.outHighway), timeoutMS);
+		public Task<Exchange<I>> Request<I>(string res, TimeSpan timeout = default) =>
+			 Request<I>(new Exchange(this, 0, (int)XFlags.OutArg, 0, res, default, cfg.outHighway),
+				  timeout != default ? (int)timeout.TotalMilliseconds : -1);
 
-		public Task<Exchange<I>> Request<I, O>(string res, O arg, int timeoutMS = -1) =>
+		public Task<Exchange<I>> Request<I, O>(string res, O arg, TimeSpan timeout = default) =>
 			 Request<I>(new Exchange<O>(this,
 					0, (int)(XFlags.InArg | XFlags.OutArg),
-					0, res, arg, cfg.outHighway), timeoutMS);
+					0, res, arg, cfg.outHighway),
+					timeout != default ? (int)timeout.TotalMilliseconds : -1);
 
 		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
 		{
