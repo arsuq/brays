@@ -103,17 +103,24 @@ namespace brays.tests
 					return;
 				}
 
-				var data = new byte[] { 87 };
-				var isReceived = false;
-
 				Task.Delay(1500).ContinueWith((_) =>
 				{
 					b = new Beamer((f) => { }, new BeamerCfg());
-					b.LockOn(t, s).Wait();
+					b.LockOn(t, s);
 				});
 
-				apr = await a.TargetIsActive(8000);
-							   
+				Task.Run(() =>
+				{
+					if (!a.IsTargetActive(8000).Result)
+					{
+						Passed = false;
+						FailureMessage = "Second IsTargetActive() await failed";
+					}
+					else "OK: Second IsTargetActive() await.".AsSuccess();
+				});
+
+				apr = await a.IsTargetActive(8000);
+
 				if (!apr)
 				{
 					FailureMessage = "Awaiting for target to become active with a probe failed!";
@@ -122,6 +129,8 @@ namespace brays.tests
 				}
 
 				"OK: Awaiting for target to become active with a probe.".AsSuccess();
+
+				await Task.Delay(300);
 
 				Passed = true;
 				IsComplete = true;

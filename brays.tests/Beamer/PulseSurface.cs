@@ -20,7 +20,7 @@ namespace brays.tests
 		{
 			var te = new TestEndpoints(args);
 
-			//await WithCheck();
+			await WithCheck(te);
 			await NoCheck(te);
 		}
 
@@ -42,7 +42,11 @@ namespace brays.tests
 
 				rayA = new Beamer(
 					(f) => { Console.WriteLine("?"); },
-					new BeamerCfg() { Log = new BeamerLogCfg("rayA", false) });
+					new BeamerCfg()
+					{
+						PulseSleepMS = 0,
+						Log = new BeamerLogCfg("rayA", true)
+					});
 
 				rayB = new Beamer((f) =>
 				{
@@ -78,7 +82,7 @@ namespace brays.tests
 						if (f != null) f.Dispose();
 					}
 
-				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", false) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", true) });
 
 				using (var hw = new HeapHighway())
 				{

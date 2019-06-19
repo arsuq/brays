@@ -128,7 +128,7 @@ namespace brays.tests
 						{
 							rayA.LockOn(aep, bep).Wait();
 
-							await rayA.TargetIsActive();
+							await rayA.IsTargetActive();
 
 							while (!rayA.IsStopped)
 							{

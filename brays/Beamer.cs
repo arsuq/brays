@@ -65,9 +65,11 @@ namespace brays
 			return probeReqAwait.WaitOne(awaitMS);
 		}
 
-		public Task<bool> TargetIsActive(int awaitMS = -1)
+		public Task<bool> IsTargetActive(int awaitMS = -1)
 		{
 			var tcs = new TaskCompletionSource<bool>();
+			ThreadPool.RegisterWaitForSingleObject(probeReqAwait,
+				(_, to) => tcs.TrySetResult(!to), null, awaitMS, true);
 
 			Task.Run(async () =>
 			{
@@ -79,11 +81,8 @@ namespace brays
 						await Task.Delay(cfg.ProbeFreqMS).ConfigureAwait(false);
 					}
 				}
-				catch(Exception ex) {  }
+				catch (Exception ex) { }
 			});
-
-			ThreadPool.RegisterWaitForSingleObject(probeReqAwait,
-				(sm, to) => tcs.TrySetResult(!to), null, awaitMS, true);
 
 			return tcs.Task;
 		}
