@@ -7,7 +7,7 @@ namespace brays
 	{
 		public BeamerLogCfg(
 			string filePath, bool enabled = true, TraceOps trace = (TraceOps)((1 << 14) - 1),
-			string ext = "brays", int rotSizeKb = 500)
+			string ext = "brays", int rotSizeKb = 5000)
 		{
 			LogFilePath = filePath;
 			IsEnabled = enabled;

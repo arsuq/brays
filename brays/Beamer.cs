@@ -23,7 +23,7 @@ namespace brays
 			blockHighway = cfg.ReceiveHighway;
 			tileXHigheay = cfg.TileExchangeHighway;
 
-			if (cfg.Log != null)
+			if (cfg.Log != null && cfg.Log.IsEnabled)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB, cfg.Log.RotateLogAtStart);
 			else
 				cfg.Log = new BeamerLogCfg(null, false, 0);

@@ -19,18 +19,18 @@ namespace brays.tests
 		{
 			await Task.Yield();
 
-			var te = new TestEndpoints(args);
+			var ta = new TestArgs(args);
 
-			var s = te.AE;
-			var t = te.BE;
+			var s = ta.AE;
+			var t = ta.BE;
 			var a = new XPU(new XCfg(
-				 new BeamerCfg() { Log = new BeamerLogCfg("a") },
-				 new XLogCfg("a", true),
+				 new BeamerCfg() { Log = new BeamerLogCfg("a", ta.Log) },
+				 new XLogCfg("a", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 
 			var b = new XPU(new XCfg(
-				 new BeamerCfg() { Log = new BeamerLogCfg("b") },
-				 new XLogCfg("b", true),
+				 new BeamerCfg() { Log = new BeamerLogCfg("b", ta.Log) },
+				 new XLogCfg("b", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 
 			const string ADD_ONE = "addOne";

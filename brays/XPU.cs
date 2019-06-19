@@ -20,7 +20,7 @@ namespace brays
 			resAPIs = new ConcurrentDictionary<string, Action<Exchange>>();
 			refAwaits = new ConcurrentDictionary<int, ExchangeAwait>();
 
-			if (cfg.log != null)
+			if (cfg.log != null && cfg.log.IsEnabled)
 				log = new Log(cfg.log.LogFilePath, cfg.log.Ext,
 					cfg.log.RotationLogFileKB, cfg.log.RotateLogAtStart);
 			else

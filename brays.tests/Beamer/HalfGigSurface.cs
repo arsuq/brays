@@ -17,16 +17,16 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
-			var te = new TestEndpoints(args);
+			var targ = new TestArgs(args);
 
 			for (int i = 0; i < 4; i++)
-				await halfGigNoLogNoVerify(te);
+				await halfGigNoLogNoVerify(targ);
 
 			IsComplete = true;
 			Passed = true;
 		}
 
-		async Task halfGigNoLogNoVerify(TestEndpoints te)
+		async Task halfGigNoLogNoVerify(TestArgs targ)
 		{
 			"[In] halfGigNoLogNoVerify()".AsTestInfo();
 			var started = DateTime.Now;
@@ -45,8 +45,8 @@ namespace brays.tests
 			{
 				var rst = new ManualResetEvent(false);
 				
-				var aep = te.AE;
-				var bep = te.BE;
+				var aep = targ.AE;
+				var bep = targ.BE;
 
 				void receive(MemoryFragment f)
 				{
@@ -102,7 +102,7 @@ namespace brays.tests
 				});
 				rayB = new Beamer(receive, new BeamerCfg()
 				{
-					Log = new BeamerLogCfg("rayB", true, traceops),
+					Log = new BeamerLogCfg("rayB", targ.Log, traceops),
 					TileSizeBytes = 60000
 				});
 

@@ -18,13 +18,13 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
-			var te = new TestEndpoints(args);
+			var targ = new TestArgs(args);
 
-			await WithCheck(te);
-			await NoCheck(te);
+			await WithCheck(targ);
+			await NoCheck(targ);
 		}
 
-		async Task WithCheck(TestEndpoints te)
+		async Task WithCheck(TestArgs targ)
 		{
 			Beamer rayA = null;
 			Beamer rayB = null;
@@ -32,8 +32,8 @@ namespace brays.tests
 			try
 			{
 				var done = new ResetEvent(false);
-				var aep = te.AE;
-				var bep = te.BE;
+				var aep = targ.AE;
+				var bep = targ.BE;
 
 				const int BYTES_TO_TRANSFER = 10_000_000;
 				const int MAX_RANDOM_SIZE = 1000;
@@ -45,7 +45,7 @@ namespace brays.tests
 					new BeamerCfg()
 					{
 						PulseSleepMS = 0,
-						Log = new BeamerLogCfg("rayA", true)
+						Log = new BeamerLogCfg("rayA", targ.Log)
 					});
 
 				rayB = new Beamer((f) =>
@@ -82,7 +82,7 @@ namespace brays.tests
 						if (f != null) f.Dispose();
 					}
 
-				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", targ.Log) });
 
 				using (var hw = new HeapHighway())
 				{
@@ -149,7 +149,7 @@ namespace brays.tests
 			}
 		}
 
-		async Task NoCheck(TestEndpoints te)
+		async Task NoCheck(TestArgs targ)
 		{
 			Beamer rayA = null;
 			Beamer rayB = null;
@@ -157,15 +157,15 @@ namespace brays.tests
 			try
 			{
 				var done = new ResetEvent(false);
-				var aep = te.AE;
-				var bep = te.BE;
+				var aep = targ.AE;
+				var bep = targ.BE;
 
 				const int BYTES_TO_TRANSFER = 100_000_000;
 				const int MAX_RANDOM_SIZE = 1000;
 				int totalSent = 0;
 				int totalReceived = 0;
 
-				rayA = new Beamer((f) => { }, new BeamerCfg() { Log = new BeamerLogCfg("rayA", true) });
+				rayA = new Beamer((f) => { }, new BeamerCfg() { Log = new BeamerLogCfg("rayA", targ.Log) });
 
 				rayB = new Beamer((f) =>
 				{
@@ -187,7 +187,7 @@ namespace brays.tests
 						if (f != null) f.Dispose();
 					}
 
-				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", targ.Log) });
 
 				var hw = new HeapHighway();
 				var ta = new Task(async () =>

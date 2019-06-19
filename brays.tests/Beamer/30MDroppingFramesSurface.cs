@@ -36,11 +36,11 @@ namespace brays.tests
 
 			try
 			{
-				var te = new TestEndpoints(args);
+				var targ = new TestArgs(args);
 				var rst = new ManualResetEvent(false);
-				var aep = te.AE;
-				var bep = te.BE;
-
+				var aep = targ.AE;
+				var bep = targ.BE;
+				
 				void receive(MemoryFragment f)
 				{
 					int len = 0;
@@ -85,7 +85,7 @@ namespace brays.tests
 					}
 				}
 
-				if (te.A)
+				if (targ.A)
 					rayA = new Beamer(
 						(f) =>
 						{
@@ -103,17 +103,17 @@ namespace brays.tests
 						},
 						new BeamerCfg()
 						{
-							Log = new BeamerLogCfg("rayA", true) { OnTrace = null },
+							Log = new BeamerLogCfg("rayA", targ.Log) { OnTrace = null },
 #if DEBUG
 							dropFrames = true,
 							deopFramePercent = 20
 #endif
 						});
 
-				if (te.B)
+				if (targ.B)
 					rayB = new Beamer(receive, new BeamerCfg()
 					{
-						Log = new BeamerLogCfg("rayB", true) { OnTrace = null },
+						Log = new BeamerLogCfg("rayB", targ.Log) { OnTrace = null },
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 20
@@ -122,7 +122,7 @@ namespace brays.tests
 
 				using (var hw = new HeapHighway())
 				{
-					if (te.A)
+					if (targ.A)
 					{
 						var ta = new Task(async () =>
 						{
@@ -155,7 +155,7 @@ namespace brays.tests
 						ta.Start();
 					}
 
-					if (te.B)
+					if (targ.B)
 					{
 						var bok = await rayB.LockOn(bep, aep);
 

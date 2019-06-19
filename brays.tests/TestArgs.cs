@@ -8,9 +8,9 @@ namespace brays.tests
 		Both, A, B
 	}
 
-	struct TestEndpoints
+	class TestArgs
 	{
-		public TestEndpoints(IDictionary<string, List<string>> args,
+		public TestArgs(IDictionary<string, List<string>> args,
 			Beamers b = Beamers.Both, int aPort = -1, int bPort = -1)
 		{
 			if (aPort < 0) aPort = APORT;
@@ -38,6 +38,8 @@ namespace brays.tests
 				if (v2.Count > 1) this.Beamers = Beamers.Parse<Beamers>(v2[1]);
 				IsLocalOnly = false;
 			}
+
+			Log = !(args.ContainsKey("*") && args["*"].Exists(x => x == "nolog"));
 		}
 
 		public bool A => this.Beamers == Beamers.A || this.Beamers == Beamers.Both;
@@ -47,6 +49,7 @@ namespace brays.tests
 		public readonly IPEndPoint BE;
 		public readonly bool IsLocalOnly;
 		public readonly Beamers Beamers;
+		public readonly bool Log;
 
 		const int APORT = 3210;
 		const int BPORT = 3211;

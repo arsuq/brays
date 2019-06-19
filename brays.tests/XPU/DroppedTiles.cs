@@ -24,7 +24,7 @@ namespace brays.tests
 
 			await Task.Yield();
 
-			var te = new TestEndpoints(args);
+			var ta = new TestArgs(args);
 			var arg = new byte[100_000_000];
 
 			void fill()
@@ -40,30 +40,30 @@ namespace brays.tests
 
 			var md5 = MD5.Create().ComputeHash(arg);
 
-			var s = te.AE;
-			var t = te.BE;
+			var s = ta.AE;
+			var t = ta.BE;
 			var a = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {
-					 Log = new BeamerLogCfg("a")
+					 Log = new BeamerLogCfg("a", ta.Log)
 #if DEBUG
 					 ,dropFrames = true,
 					 deopFramePercent = 20
 #endif
 				 },
-				 new XLogCfg("a", true),
+				 new XLogCfg("a", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 
 			var b = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {
-					 Log = new BeamerLogCfg("b")
+					 Log = new BeamerLogCfg("b", ta.Log)
 #if DEBUG
 					 ,dropFrames = true,
 					 deopFramePercent = 20
 #endif
 				 },
-				 new XLogCfg("b", true),
+				 new XLogCfg("b", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 
 			const string F = "verify_hash";

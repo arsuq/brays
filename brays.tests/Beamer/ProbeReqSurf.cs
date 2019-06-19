@@ -22,9 +22,9 @@ namespace brays.tests
 
 			try
 			{
-				var te = new TestEndpoints(args);
-				var s = te.AE;
-				var t = te.BE;
+				var targ = new TestArgs(args);
+				var s = targ.AE;
+				var t = targ.BE;
 
 				a = new Beamer((_) => { }, new BeamerCfg()
 				{

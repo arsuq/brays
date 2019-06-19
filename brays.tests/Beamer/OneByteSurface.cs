@@ -23,12 +23,12 @@ namespace brays.tests
 			try
 			{
 				var rst = new ManualResetEvent(false);
-				var te = new TestEndpoints(args);
-				var aep = te.AE;
-				var bep = te.BE;
+				var targ = new TestArgs(args);
+				var aep = targ.AE;
+				var bep = targ.BE;
 
 				rayA = new Beamer((f) => { Console.WriteLine("?"); },
-					new BeamerCfg() { Log = new BeamerLogCfg("rayA", true) });
+					new BeamerCfg() { Log = new BeamerLogCfg("rayA", targ.Log) });
 				rayB = new Beamer((f) =>
 				{
 					if (f.Span()[0] == 77)
@@ -44,7 +44,7 @@ namespace brays.tests
 
 					rst.Set();
 
-				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", true) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", targ.Log) });
 
 				using (var hw = new HeapHighway(50))
 				{

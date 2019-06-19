@@ -27,13 +27,13 @@ namespace brays.tests
 
 			try
 			{
-				var te = new TestEndpoints(args);
-				var aep = te.AE;
-				var bep = te.BE;
+				var targ = new TestArgs(args);
+				var aep = targ.AE;
+				var bep = targ.BE;
 
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
-					Log = new BeamerLogCfg("rayA", true),
+					Log = new BeamerLogCfg("rayA", targ.Log),
 					MaxBeamedTilesAtOnce = CFGA
 #if DEBUG
 					, dropFrames = true,
@@ -43,7 +43,7 @@ namespace brays.tests
 
 				rayB = new Beamer((f) => { }, new BeamerCfg()
 				{
-					Log = new BeamerLogCfg("rayB", true),
+					Log = new BeamerLogCfg("rayB", targ.Log),
 					MaxBeamedTilesAtOnce = CFGB
 #if DEBUG
 					, dropFrames = true,

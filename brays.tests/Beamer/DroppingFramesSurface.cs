@@ -27,16 +27,16 @@ namespace brays.tests
 
 			try
 			{
-				var te = new TestEndpoints(args);
+				var targ = new TestArgs(args);
 				var rst = new ManualResetEvent(false);
-				var aep = te.AE;
-				var bep = te.BE;
+				var aep = targ.AE;
+				var bep = targ.BE;
 
 				rayA = new Beamer(
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
-						Log = new BeamerLogCfg("rayA", true),
+						Log = new BeamerLogCfg("rayA", targ.Log),
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 30
@@ -73,7 +73,7 @@ namespace brays.tests
 					}
 				}, new BeamerCfg()
 				{
-					Log = new BeamerLogCfg("rayB", true),
+					Log = new BeamerLogCfg("rayB", targ.Log),
 #if DEBUG
 					dropFrames = true,
 					deopFramePercent = 30
