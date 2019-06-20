@@ -75,8 +75,8 @@ namespace brays.tests
 				await a.Start(s, t);
 				await b.Start(t, s);
 
-				using (var ix = await a.Request<bool, (byte[], byte[])>(F, (arg, md5)))
-					if (!ix.IsOK || !ix.Arg)
+				using (var ix = await a.Request(F, (arg, md5)))
+					if (!ix.IsOK || !ix.Make<bool>())
 					{
 						Passed = false;
 						FailureMessage = "Exchange failure.";

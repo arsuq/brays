@@ -55,7 +55,7 @@ namespace brays
 			trace("Stopped");
 		}
 
-		public Task<Exchange> Trigger(Exchange ox, TimeSpan rplTimeout = default)
+		public Task<Exchange> Request(Exchange ox, TimeSpan rplTimeout = default)
 		{
 			var tc = new TaskCompletionSource<Exchange>();
 
@@ -70,70 +70,29 @@ namespace brays
 				if (tc.TrySetResult(ix)) trace(ix);
 			}));
 
-			Task.Run(() =>
+			Task.Run(async () =>
 			{
-				if (!beamer.Beam(ox.Fragment).Result)
+				if (await beamer.Beam(ox.Fragment))
+				{
+					ox.Mark(XState.Beamed);
+					trace(ox);
+				}
+				else
 				{
 					var nb = new Exchange((int)XPUErrorCode.NotBeamed);
 					if (tc.TrySetResult(nb)) trace(nb);
 				}
-				else
-				{
-					ox.Mark(XState.Beamed);
-					trace(ox);
-				}
 			});
 
 			return tc.Task;
 		}
 
-		public Task<Exchange<I>> Request<I>(Exchange ox, TimeSpan rplTimeout = default)
-		{
-			var tc = new TaskCompletionSource<Exchange<I>>();
+		public Task<Exchange> Request(string res, TimeSpan rplTimeout = default) =>
+			 Request(new Exchange(this, 0, 0, 0, res, default, cfg.outHighway), rplTimeout);
 
-			if (rplTimeout != default && rplTimeout != Timeout.InfiniteTimeSpan) Task.Delay(rplTimeout).ContinueWith((_) =>
-			{
-				var tx = new Exchange<I>((int)XPUErrorCode.Timeout);
-				if (tc.TrySetResult(tx)) trace(tx);
-			});
+		public Task<Exchange> Request<O>(string res, O arg, TimeSpan rplTimeout = default) =>
+			 Request(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway), rplTimeout);
 
-			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
-			{
-				var k = new Exchange<I>(this, ix.Fragment);
-				if (tc.TrySetResult(k)) trace(k);
-			}));
-
-			Task.Run(() =>
-			{
-				if (!beamer.Beam(ox.Fragment).Result)
-				{
-					var nb = new Exchange<I>((int)XPUErrorCode.NotBeamed);
-					if (tc.TrySetResult(nb)) trace(nb);
-				}
-				else
-				{
-					ox.Mark(XState.Beamed);
-					trace(ox);
-				}
-			});
-
-			return tc.Task;
-		}
-
-		public Task<Exchange> Trigger(string res, TimeSpan rplTimeout = default) =>
-			 Trigger(new Exchange(this, 0, 0, 0, res, default, cfg.outHighway), rplTimeout);
-
-		public Task<Exchange> Trigger<O>(string res, O arg, TimeSpan rplTimeout = default) =>
-			 Trigger(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway), rplTimeout);
-
-		public Task<Exchange<I>> Request<I>(string res, TimeSpan rplTimeout = default) =>
-			 Request<I>(new Exchange(this, 0, (int)XFlags.OutArg, 0, res, default, cfg.outHighway), rplTimeout);
-
-		public Task<Exchange<I>> Request<I, O>(string res, O arg, TimeSpan rplTimeout = default) =>
-			 Request<I>(new Exchange<O>(this,
-					0, (int)(XFlags.InArg | XFlags.OutArg),
-					0, res, arg, cfg.outHighway),
-					rplTimeout);
 
 		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
 		{
@@ -173,9 +132,9 @@ namespace brays
 		public async Task<IEnumerable<string>> GetRemoteAPIList()
 		{
 			var ox = new Exchange(this, 0, 0, 0, API_LIST, default, cfg.outHighway);
-			var ix = await Request<List<string>>(ox.ResID).ConfigureAwait(false);
+			var ix = await Request(ox.ResID).ConfigureAwait(false);
 
-			if (ix.IsOK) remoteAPI = ix.Arg;
+			if (ix.IsOK) remoteAPI = ix.Make<List<string>>();
 
 			return remoteAPI;
 		}

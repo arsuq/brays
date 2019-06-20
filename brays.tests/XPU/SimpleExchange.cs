@@ -44,34 +44,21 @@ namespace brays.tests
 				await a.Start(s, t);
 				await b.Start(t, s);
 
-				using (var ix = await a.Request<int, int>(ADD_ONE, 3))
-					if (!ix.IsOK || ix.Arg != 4)
+				using (var ix = await a.Request(ADD_ONE, 3))
+					if (!ix.IsOK || ix.Make<int>() != 4)
 					{
 						Passed = false;
 						FailureMessage = "Request failure.";
 						return;
 					}
 
-				using (var ix = await a.Request<int, int>(ADD_ONE_GEN, 8))
-					if (!ix.IsOK || ix.Arg != 9)
+				using (var ix = await a.Request(ADD_ONE_GEN, 8))
+					if (!ix.IsOK || ix.Make<int>() != 9)
 					{
 						Passed = false;
 						FailureMessage = "Request failure.";
 						return;
 					}
-
-				using (var ix = await a.Trigger(ADD_ONE, 3))
-				{
-					var q = ix.Make<int>();
-
-					if (!ix.IsOK)
-					{
-						Passed = false;
-						FailureMessage = "Trigger failure.";
-						return;
-					}
-				}
-
 
 				Passed = true;
 				IsComplete = true;
@@ -94,7 +81,7 @@ namespace brays.tests
 
 			data++;
 
-			ix.XPU.Reply(ix, data).Wait();
+			ix.XPU.Reply(ix, data);
 		}
 
 		void add_oneg(Exchange<int> ix)
@@ -102,7 +89,7 @@ namespace brays.tests
 			// Implicit cast as T
 			int v = ix;
 
-			ix.Instance.Reply(++v).Wait();
+			ix.Instance.Reply(++v);
 		}
 	}
 }
