@@ -87,7 +87,7 @@ namespace brays
 			return tcs.Task;
 		}
 
-		public async Task<(bool ok, Exception ex)> LockOn(IPEndPoint listen, IPEndPoint target, bool configExchange = false)
+		public async Task<(bool ok, Exception ex)> LockOn(IPEndPoint listen, IPEndPoint target)
 		{
 			if (lockOnGate.Enter())
 				try
@@ -119,28 +119,13 @@ namespace brays
 					if (probingTask == null) probingTask = probe();
 					if (cleanupTask == null) cleanupTask = cleanup();
 					if (autoPulseTask == null) autoPulseTask = autoPulse();
-
-					if (configExchange)
-					{
-						if (!await ConfigExchange(0, true))
-						{
-							Volatile.Write(ref stop, 1);
-							return (false, null);
-						}
-
-						if (targetCfg.TileSizeBytes < cfg.TileSizeBytes)
-							cfg.TileSizeBytes = targetCfg.TileSizeBytes;
-
-						var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
-						if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
-					}
-
 					if (ccBeams != null) ccBeams.Dispose();
 					ccBeams = new SemaphoreSlim(cfg.MaxBeamedTilesAtOnce, cfg.MaxBeamedTilesAtOnce);
 
 					Volatile.Write(ref isLocked, true);
 
 					trace("Lock-on", $"{source.ToString()} target: {target.ToString()}");
+
 					return (true, null);
 				}
 				catch (Exception ex)
@@ -179,6 +164,9 @@ namespace brays
 					{
 						rst.Set();
 						if (frag != null) frag.Dispose();
+
+						var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
+						if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
 					}
 
 					var mark = await tilex((byte)Lead.Cfg, sf, null, 0, 0,

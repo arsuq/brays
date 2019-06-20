@@ -53,7 +53,7 @@ namespace brays.tests
 
 				var ta = new Task(() =>
 				{
-					if (rayA.LockOn(aep, bep, true).Result.ok)
+					if (rayA.LockOn(aep, bep).Result.ok && rayA.ConfigExchange(0, true).Result)
 					{
 						// The remote config must be available here
 						var tc = rayA.GetTargetConfig();
@@ -63,12 +63,11 @@ namespace brays.tests
 							FailureMessage = "The remote config B is not correct or is missing.";
 						}
 					}
-
 				});
 
 				var tb = new Task(() =>
 				{
-					if (rayB.LockOn(bep, aep, true).Result.ok)
+					if (rayB.LockOn(bep, aep).Result.ok && rayB.ConfigExchange(0, true).Result)
 					{
 						var tc = rayB.GetTargetConfig();
 						if (tc == null || tc.MaxBeamedTilesAtOnce != CFGA)
