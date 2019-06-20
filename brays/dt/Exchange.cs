@@ -105,13 +105,19 @@ namespace brays
 			}
 		}
 
-		public bool MarkAsProcessing() =>
-			Interlocked.CompareExchange(ref state, (int)XState.Processing, (int)XState.Received) ==
-				(int)XState.Received;
-
-		public bool MarkAsBeamed() =>
-			Interlocked.CompareExchange(ref state, (int)XState.Beamed, (int)XState.Created) ==
-				(int)XState.Created;
+		public bool Mark(XState s)
+		{
+			switch (s)
+			{
+				case XState.Beamed:
+				return Interlocked.CompareExchange(ref state, (int)XState.Beamed, (int)XState.Created) == (int)XState.Created;
+				case XState.Processing:
+				return Interlocked.CompareExchange(ref state, (int)XState.Processing, (int)XState.Received) == (int)XState.Received;
+				case XState.Faulted:
+				{ Interlocked.Exchange(ref state, (int)XState.Faulted); return true; }
+				default: return false;
+			}
+		}
 
 		public readonly XPU XPU;
 		public readonly bool IsValid;
@@ -132,7 +138,7 @@ namespace brays
 		public readonly string ResID;
 		public readonly int DataOffset;
 
-		public int state;
+		int state;
 
 		// [i] The fragment begins with a special value indicating that it is an exchange type.
 		// Technically this is not mandatory since the Beamer is not shared and all received frags

@@ -55,21 +55,19 @@ namespace brays
 			trace("Stopped");
 		}
 
-		public Task<Exchange> Trigger(Exchange ox, int timeoutMS = -1)
+		public Task<Exchange> Trigger(Exchange ox, TimeSpan rplTimeout = default)
 		{
 			var tc = new TaskCompletionSource<Exchange>();
 
-			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
+			if (rplTimeout != default && rplTimeout != Timeout.InfiniteTimeSpan) Task.Delay(rplTimeout).ContinueWith((_) =>
 			{
 				var tx = new Exchange((int)XPUErrorCode.Timeout);
-				tc.TrySetResult(tx);
-				trace(tx);
+				if (tc.TrySetResult(tx)) trace(tx);
 			});
 
 			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
 			{
-				tc.TrySetResult(ix);
-				trace(ix);
+				if (tc.TrySetResult(ix)) trace(ix);
 			}));
 
 			Task.Run(() =>
@@ -77,12 +75,11 @@ namespace brays
 				if (!beamer.Beam(ox.Fragment).Result)
 				{
 					var nb = new Exchange((int)XPUErrorCode.NotBeamed);
-					tc.TrySetResult(nb);
-					trace(nb);
+					if (tc.TrySetResult(nb)) trace(nb);
 				}
 				else
 				{
-					ox.MarkAsBeamed();
+					ox.Mark(XState.Beamed);
 					trace(ox);
 				}
 			});
@@ -90,22 +87,20 @@ namespace brays
 			return tc.Task;
 		}
 
-		public Task<Exchange<I>> Request<I>(Exchange ox, int timeoutMS = -1)
+		public Task<Exchange<I>> Request<I>(Exchange ox, TimeSpan rplTimeout = default)
 		{
 			var tc = new TaskCompletionSource<Exchange<I>>();
 
-			if (timeoutMS > -1) Task.Delay(timeoutMS).ContinueWith((_) =>
+			if (rplTimeout != default && rplTimeout != Timeout.InfiniteTimeSpan) Task.Delay(rplTimeout).ContinueWith((_) =>
 			{
 				var tx = new Exchange<I>((int)XPUErrorCode.Timeout);
-				tc.TrySetResult(tx);
-				trace(tx);
+				if (tc.TrySetResult(tx)) trace(tx);
 			});
 
 			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
 			{
 				var k = new Exchange<I>(this, ix.Fragment);
-				tc.TrySetResult(k);
-				trace(k);
+				if (tc.TrySetResult(k)) trace(k);
 			}));
 
 			Task.Run(() =>
@@ -113,12 +108,11 @@ namespace brays
 				if (!beamer.Beam(ox.Fragment).Result)
 				{
 					var nb = new Exchange<I>((int)XPUErrorCode.NotBeamed);
-					tc.TrySetResult(nb);
-					trace(nb);
+					if (tc.TrySetResult(nb)) trace(nb);
 				}
 				else
 				{
-					ox.MarkAsBeamed();
+					ox.Mark(XState.Beamed);
 					trace(ox);
 				}
 			});
@@ -126,23 +120,20 @@ namespace brays
 			return tc.Task;
 		}
 
-		public Task<Exchange> Trigger(string res, TimeSpan timeout = default) =>
-			 Trigger(new Exchange(this, 0, 0, 0, res, default, cfg.outHighway),
-				 timeout != default ? (int)timeout.TotalMilliseconds : -1);
+		public Task<Exchange> Trigger(string res, TimeSpan rplTimeout = default) =>
+			 Trigger(new Exchange(this, 0, 0, 0, res, default, cfg.outHighway), rplTimeout);
 
-		public Task<Exchange> Trigger<O>(string res, O arg, TimeSpan timeout = default) =>
-			 Trigger(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway),
-				 timeout != default ? (int)timeout.TotalMilliseconds : -1);
+		public Task<Exchange> Trigger<O>(string res, O arg, TimeSpan rplTimeout = default) =>
+			 Trigger(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway), rplTimeout);
 
-		public Task<Exchange<I>> Request<I>(string res, TimeSpan timeout = default) =>
-			 Request<I>(new Exchange(this, 0, (int)XFlags.OutArg, 0, res, default, cfg.outHighway),
-				  timeout != default ? (int)timeout.TotalMilliseconds : -1);
+		public Task<Exchange<I>> Request<I>(string res, TimeSpan rplTimeout = default) =>
+			 Request<I>(new Exchange(this, 0, (int)XFlags.OutArg, 0, res, default, cfg.outHighway), rplTimeout);
 
-		public Task<Exchange<I>> Request<I, O>(string res, O arg, TimeSpan timeout = default) =>
+		public Task<Exchange<I>> Request<I, O>(string res, O arg, TimeSpan rplTimeout = default) =>
 			 Request<I>(new Exchange<O>(this,
 					0, (int)(XFlags.InArg | XFlags.OutArg),
 					0, res, arg, cfg.outHighway),
-					timeout != default ? (int)timeout.TotalMilliseconds : -1);
+					rplTimeout);
 
 		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
 		{
@@ -157,11 +148,12 @@ namespace brays
 
 				if (await beamer.Beam(ox.Fragment).ConfigureAwait(false))
 				{
-					ox.MarkAsBeamed();
-					trace(ox);
+					ox.Mark(XState.Beamed);
 					r = true;
 				}
-				else trace("Ex", "Failed to beam a reply");
+				else ox.Mark(XState.Faulted);
+
+				trace(ox);
 			}
 
 			return r;
@@ -207,7 +199,7 @@ namespace brays
 
 				if (refAwaits.TryRemove(x.RefID, out ExchangeAwait xa))
 				{
-					x.MarkAsProcessing();
+					x.Mark(XState.Processing);
 					xa.OnReferred(x);
 				}
 				else
@@ -218,7 +210,7 @@ namespace brays
 			}
 			else if (resAPIs.TryGetValue(x.ResID, out Action<Exchange> action))
 			{
-				x.MarkAsProcessing();
+				x.Mark(XState.Processing);
 				action(x);
 			}
 		}
