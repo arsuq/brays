@@ -46,14 +46,14 @@ namespace brays
 				catch { }
 		}
 
-		public async Task<(bool, Exception)> Start(IPEndPoint listen, IPEndPoint target) =>
-			await beamer.LockOn(listen, target).ConfigureAwait(false);
-
-		public void Stop()
-		{
-			beamer.Stop();
-			trace("Stopped");
-		}
+		/// <summary>
+		/// Locks on the target endpoint.
+		/// </summary>
+		/// <param name="listen">The local endpoint</param>
+		/// <param name="target">The remote endpoint</param>
+		/// <returns>True if succeeds</returns>
+		public Task<(bool, Exception)> Start(IPEndPoint listen, IPEndPoint target) =>
+			 beamer.LockOn(listen, target);
 
 		public Task<Exchange> Request(Exchange ox, TimeSpan rplTimeout = default)
 		{
@@ -92,7 +92,6 @@ namespace brays
 
 		public Task<Exchange> Request<O>(string res, O arg, TimeSpan rplTimeout = default) =>
 			 Request(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway), rplTimeout);
-
 
 		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
 		{

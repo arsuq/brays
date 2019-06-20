@@ -31,7 +31,7 @@ namespace brays
 
 		public void Dispose()
 		{
-			if (!isDisposed)
+			if (Interlocked.CompareExchange(ref isDisposed, 1, 0) == 0)
 				try
 				{
 					Interlocked.Exchange(ref stop, 1);
@@ -48,16 +48,8 @@ namespace brays
 						foreach (var b in blocks.Values)
 							if (b != null) b.Dispose();
 				}
-				catch (Exception ex)
-				{
-				}
-				finally
-				{
-					isDisposed = true;
-				}
+				catch { }
 		}
-
-		public void Stop() => Volatile.Write(ref stop, 1);
 
 		public bool Probe(int awaitMS = 2000)
 		{
@@ -221,6 +213,7 @@ namespace brays
 
 		public readonly Guid ID;
 		public bool IsStopped => Volatile.Read(ref stop) > 0;
+		public bool IsDisposed => Volatile.Read(ref isDisposed) > 0;
 		public bool IsTargetLocked => isLocked;
 		public int FrameCounter => frameCounter;
 		public int ReceivedDgrams => receivedDgrams;
@@ -1238,7 +1231,7 @@ namespace brays
 		int stop;
 		int retries;
 		bool isLocked;
-		bool isDisposed;
+		int isDisposed;
 		long lastReceivedProbeTick;
 		long lastReceivedDgramTick;
 		byte[] probeLead = new byte[] { (byte)Lead.Probe };
@@ -1246,7 +1239,7 @@ namespace brays
 
 		SemaphoreSlim ccBeams;
 
-		// [!] Don't make this Slim!
+		// [!] Don't make the probeReqAwait Slim!
 		ManualResetEvent probeReqAwait = new ManualResetEvent(false);
 		ManualResetEventSlim lockOnRst = new ManualResetEventSlim(true);
 		Gate lockOnGate = new Gate();
