@@ -9,10 +9,10 @@ namespace brays
 {
 	public static class ExchangeExt
 	{
-		public static Task<Exchange> Trigger(this Exchange ox, TimeSpan timeout = default) =>
-			ox.XPU.Request(ox, timeout);
+		public static Task<Exchange> Reply<T>(this Exchange x, T arg, bool doNotReply = false, bool disposex = true) =>
+			x.XPU.Reply<T>(x, arg, doNotReply, disposex);
 
-		public static Task<Exchange> Reply<T>(this Exchange x, T arg, bool disposex = true) =>
-			x.XPU.Reply<T>(x, arg, disposex);
+		public static Task<Exchange> ReplyRaw(this Exchange x, Span<byte> arg, bool doNotReply = false, bool disposex = true) =>
+			x.XPU.ReplyRaw(x, arg, doNotReply, disposex);
 	}
 }

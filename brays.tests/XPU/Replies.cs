@@ -39,17 +39,22 @@ namespace brays.tests
 				await a.TargetIsActive();
 				await b.TargetIsActive();
 
-				var x = await a.Request("ep", 43);
-				var data = x.Make<int>();
+				var ms = new MarshalSlot(4);
+				ms.Write(33, 0);
 
-				while (data < 50)
+				var x = await a.RequestRaw("ep", ms);
+				var data = ms.ToSpan<int>()[0];
+
+				while (data >= 0)
 				{
-					x = await x.Reply(data);
+					data--;
+					ms.Write(data, 0);
+
+					x = await x.ReplyRaw(ms);
 
 					if (!x.IsOK) break;
 
-					data = x.Make<int>();
-					data++;
+					x.Fragment.Read(ref data, x.DataOffset);
 				}
 
 				Passed = true;
@@ -70,16 +75,18 @@ namespace brays.tests
 		async Task entry_point(Exchange<int> ix)
 		{
 			var data = ix.Arg;
-			Exchange x = null;
+			var ms = new MarshalSlot(4);
+			Exchange x = ix;
 
-			while (data <= 50)
+			while (data >= 0)
 			{
-				x = await x.Reply(data);
+				data--;
+				ms.Write(data, 0);
+				x = await x.ReplyRaw(ms);
 
 				if (!x.IsOK) break;
 
-				data = x.Make<int>();
-				data++;
+				x.Fragment.Read(ref data, x.DataOffset);
 			}
 		}
 	}

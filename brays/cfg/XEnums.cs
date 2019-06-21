@@ -10,9 +10,9 @@ namespace brays
 	public enum XFlags : int
 	{
 		NotSet = 0,
-		InArg = 1,
-		OutArg = 2,
-		IsReply = 4
+		IsReply = 1,
+		DoNotReply = 2,
+		NoSerialization = 4
 	}
 
 	public enum XState : byte
