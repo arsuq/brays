@@ -7,9 +7,9 @@
     <Authors>Arsuq</Authors>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Version>0.8.0</Version>
-    <Product>Brays</Product>
-    <PackageId>Brays</PackageId>
-    <Description />
+    <Product>brays</Product>
+    <PackageId>brays</PackageId>
+    <Description>Infrastructure for C2C RPC over UDP.</Description>
     <PackageLicenseUrl>https://www.mozilla.org/en-US/MPL/2.0/</PackageLicenseUrl>
   </PropertyGroup>
 

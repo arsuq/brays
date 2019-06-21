@@ -72,8 +72,8 @@ namespace brays.tests
 			{
 				b.RegisterAPI<(byte[] data, byte[] hash)>(F, verify_hash);
 
-				await a.Start(s, t);
-				await b.Start(t, s);
+				 a.Start(s, t);
+				 b.Start(t, s);
 
 				using (var ix = await a.Request(F, (arg, md5)))
 					if (!ix.IsOK || !ix.Make<bool>())

@@ -38,8 +38,8 @@ namespace brays.tests
 					ProbeFreqMS = 100
 				});
 
-				a.LockOn(s, t).Wait();
-				b.LockOn(t, s).Wait();
+				a.LockOn(s, t);
+				b.LockOn(t, s);
 
 				await Task.Delay(2000);
 
@@ -111,15 +111,15 @@ namespace brays.tests
 
 				Task.Run(() =>
 				{
-					if (!a.IsTargetActive(8000).Result)
+					if (!a.TargetIsActive(8000).Result)
 					{
 						Passed = false;
-						FailureMessage = "Second IsTargetActive() await failed";
+						FailureMessage = "Second TargetIsActive() await failed";
 					}
-					else "OK: Second IsTargetActive() await.".AsSuccess();
+					else "OK: Second TargetIsActive() await.".AsSuccess();
 				});
 
-				apr = await a.IsTargetActive(8000);
+				apr = await a.TargetIsActive(8000);
 
 				if (!apr)
 				{

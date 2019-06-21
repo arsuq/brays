@@ -90,7 +90,7 @@ namespace brays.tests
 					{
 						await Task.Yield();
 
-						rayA.LockOn(aep, bep).Wait();
+						rayA.LockOn(aep, bep);
 						var rdm = new Random();
 
 						while (true)
@@ -119,7 +119,7 @@ namespace brays.tests
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep).Wait();
+						rayB.LockOn(bep, aep);
 					});
 
 					ta.Start();
@@ -194,7 +194,7 @@ namespace brays.tests
 				{
 					await Task.Yield();
 
-					rayA.LockOn(aep, bep).Wait();
+					rayA.LockOn(aep, bep);
 					var rdm = new Random();
 
 					while (true)
@@ -220,7 +220,7 @@ namespace brays.tests
 
 				var tb = new Task(() =>
 				{
-					rayB.LockOn(bep, aep).Wait();
+					rayB.LockOn(bep, aep);
 				});
 
 				ta.Start();

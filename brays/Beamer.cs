@@ -61,7 +61,7 @@ namespace brays
 			return probeReqAwait.WaitOne(awaitMS);
 		}
 
-		public Task<bool> IsTargetActive(int awaitMS = -1)
+		public Task<bool> TargetIsActive(int awaitMS = -1)
 		{
 			var tcs = new TaskCompletionSource<bool>();
 			ThreadPool.RegisterWaitForSingleObject(probeReqAwait,
@@ -83,8 +83,10 @@ namespace brays
 			return tcs.Task;
 		}
 
-		public async Task<(bool ok, Exception ex)> LockOn(IPEndPoint listen, IPEndPoint target)
+		public bool LockOn(IPEndPoint listen, IPEndPoint target)
 		{
+			var r = false;
+
 			if (lockOnGate.Enter())
 				try
 				{
@@ -122,20 +124,19 @@ namespace brays
 
 					trace("Lock-on", $"{source.ToString()} target: {target.ToString()}");
 
-					return (true, null);
+					r = true;
 				}
 				catch (Exception ex)
 				{
 					if (!lockOnRst.IsSet) lockOnRst.Set();
 					trace("Ex", "LockOn", ex.ToString());
-					return (false, ex);
 				}
 				finally
 				{
 					lockOnGate.Exit();
 				}
 
-			return (false, null);
+			return r;
 		}
 
 		public async Task<bool> ConfigExchange(int refID = 0, bool awaitRemote = false)

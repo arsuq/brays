@@ -21,7 +21,7 @@ namespace brays
 		{
 			this.cfg = cfg;
 			this.beamer = new Beamer(onReceive, cfg.bcfg);
-			resAPIs = new ConcurrentDictionary<string, Action<Exchange>>();
+			resAPIs = new ConcurrentDictionary<string, Func<Exchange, Task>>();
 			refAwaits = new ConcurrentDictionary<int, ExchangeAwait>();
 
 			if (cfg.log != null && cfg.log.IsEnabled)
@@ -56,8 +56,10 @@ namespace brays
 		/// <param name="listen">The local endpoint</param>
 		/// <param name="target">The remote endpoint</param>
 		/// <returns>True if succeeds</returns>
-		public Task<(bool, Exception)> Start(IPEndPoint listen, IPEndPoint target) =>
+		public bool Start(IPEndPoint listen, IPEndPoint target) =>
 			 beamer.LockOn(listen, target);
+
+		public Task<bool> TargetIsActive(int timeout = -1) => beamer.TargetIsActive(timeout);
 
 		public Task<Exchange> Request(Exchange ox, TimeSpan rplTimeout = default)
 		{
@@ -97,38 +99,40 @@ namespace brays
 		public Task<Exchange> Request<O>(string res, O arg, TimeSpan rplTimeout = default) =>
 			 Request(new Exchange<O>(this, 0, (int)XFlags.InArg, 0, res, arg, cfg.outHighway), rplTimeout);
 
-		public async Task<bool> Reply<T>(Exchange x, T arg, bool disposex = true)
+		public Task<Exchange> Reply<O>(int xid, O arg, TimeSpan rplTimeout = default) =>
+			Request(new Exchange<O>(this, xid, (int)(XFlags.IsReply | XFlags.InArg),
+				0, string.Empty, arg, cfg.outHighway), rplTimeout);
+
+		public Task<Exchange> Reply<O>(Exchange x, O arg, bool disposex = true, TimeSpan rplTimeout = default)
 		{
-			var xf = XFlags.IsReply | XFlags.InArg;
-			var r = false;
+			if (disposex) x.Dispose();
 
-			using (Exchange ox = new Exchange<T>(this,
-				x.ID, (int)xf, 0, string.Empty,
-				arg, cfg.outHighway))
-			{
-				if (disposex) x.Dispose();
-
-				if (await beamer.Beam(ox.Fragment).ConfigureAwait(false))
-				{
-					ox.Mark(XState.Beamed);
-					r = true;
-				}
-				else ox.Mark(XState.Faulted);
-
-				trace(ox);
-			}
-
-			return r;
+			return Request(new Exchange<O>(this, x.ID,
+				(int)(XFlags.IsReply | XFlags.InArg), 0, string.Empty,
+				arg, cfg.outHighway), rplTimeout);
 		}
+
+		public bool RegisterAPI<T>(string key, Func<Exchange<T>, Task> f) =>
+			resAPIs.TryAdd(key, (x) =>
+			{
+				if (x != null) f(new Exchange<T>(this, x.Fragment));
+				else f(null);
+
+				return null;
+			});
 
 		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
 			resAPIs.TryAdd(key, (x) =>
 			{
 				if (x != null) f(new Exchange<T>(this, x.Fragment));
 				else f(null);
+
+				return null;
 			});
 
-		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, f);
+		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, (ix) => { f(ix); return null; });
+
+		public bool RegisterAPI(string key, Func<Exchange, Task> f) => resAPIs.TryAdd(key, f);
 
 		public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _);
 
@@ -170,7 +174,7 @@ namespace brays
 					x.Dispose();
 				}
 			}
-			else if (resAPIs.TryGetValue(x.ResID, out Action<Exchange> action))
+			else if (resAPIs.TryGetValue(x.ResID, out Func<Exchange, Task> action))
 			{
 				x.Mark(XState.Processing);
 				action(x);
@@ -183,7 +187,7 @@ namespace brays
 
 			var API = new List<string>(resAPIs.Keys);
 
-			if (!Reply(x, API).Result)
+			if (!Reply(x, API).Result.IsOK)
 				trace("Ex", "listAPIs", "Failed to reply");
 		}
 
@@ -249,7 +253,7 @@ namespace brays
 		Task cleanupTask;
 
 		List<string> remoteAPI;
-		ConcurrentDictionary<string, Action<Exchange>> resAPIs;
+		ConcurrentDictionary<string, Func<Exchange, Task>> resAPIs;
 		ConcurrentDictionary<int, ExchangeAwait> refAwaits;
 
 		int exchangeID;

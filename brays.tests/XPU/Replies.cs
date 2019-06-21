@@ -1,15 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Net;
 using TestSurface;
 
 
 namespace brays.tests
 {
-	class SimpleExchange : ITestSurface
+	class Replies : ITestSurface
 	{
-		public string Info => "Tests the basic request reply.";
+		public string Info => "Tests reply sequencing.";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
@@ -17,10 +16,7 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
-			await Task.Yield();
-
 			var ta = new TestArgs(args);
-
 			var s = ta.AE;
 			var t = ta.BE;
 			var a = new XPU(new XCfg(
@@ -33,13 +29,9 @@ namespace brays.tests
 				 new XLogCfg("b", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 
-			const string ADD_ONE = "addOne";
-			const string ADD_ONE_GEN = "addOneGen";
-
 			try
 			{
-				b.RegisterAPI(ADD_ONE, add_one);
-				b.RegisterAPI<int>(ADD_ONE_GEN, add_oneg);
+				b.RegisterAPI<int>("ep", entry_point);
 
 				a.Start(s, t);
 				b.Start(t, s);
@@ -47,21 +39,18 @@ namespace brays.tests
 				await a.TargetIsActive();
 				await b.TargetIsActive();
 
-				using (var ix = await a.Request(ADD_ONE, 3))
-					if (!ix.IsOK || ix.Make<int>() != 4)
-					{
-						Passed = false;
-						FailureMessage = "Request failure.";
-						return;
-					}
+				var x = await a.Request("ep", 43);
+				var data = x.Make<int>();
 
-				using (var ix = await a.Request(ADD_ONE_GEN, 8))
-					if (!ix.IsOK || ix.Make<int>() != 9)
-					{
-						Passed = false;
-						FailureMessage = "Request failure.";
-						return;
-					}
+				while (data < 50)
+				{
+					x = await x.Reply(data);
+
+					if (!x.IsOK) break;
+
+					data = x.Make<int>();
+					data++;
+				}
 
 				Passed = true;
 				IsComplete = true;
@@ -78,21 +67,20 @@ namespace brays.tests
 			}
 		}
 
-		void add_one(Exchange ix)
+		async Task entry_point(Exchange<int> ix)
 		{
-			var data = ix.Make<int>();
+			var data = ix.Arg;
+			Exchange x = null;
 
-			data++;
+			while (data <= 50)
+			{
+				x = await x.Reply(data);
 
-			ix.XPU.Reply(ix, data);
-		}
+				if (!x.IsOK) break;
 
-		void add_oneg(Exchange<int> ix)
-		{
-			// Implicit cast as T
-			int v = ix;
-
-			ix.Instance.Reply(++v);
+				data = x.Make<int>();
+				data++;
+			}
 		}
 	}
 }

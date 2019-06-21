@@ -67,7 +67,7 @@ namespace brays.tests
 				{
 					var ta = new Task(async () =>
 					{
-						rayA.LockOn(aep, bep).Wait();
+						rayA.LockOn(aep, bep) ;
 
 						var f = hw.Alloc(MEG);
 
@@ -79,7 +79,7 @@ namespace brays.tests
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep).Wait();
+						rayB.LockOn(bep, aep);
 					});
 
 					ta.Start();

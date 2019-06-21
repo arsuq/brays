@@ -110,7 +110,7 @@ namespace brays.tests
 				{
 					var ta = new Task(() =>
 					{
-						rayA.LockOn(aep, bep).Wait();
+						rayA.LockOn(aep, bep);
 
 						while (!rayA.IsStopped)
 						{
@@ -129,7 +129,7 @@ namespace brays.tests
 
 					var tb = new Task(() =>
 					{
-						rayB.LockOn(bep, aep).Wait();
+						rayB.LockOn(bep, aep);
 					});
 
 					ta.Start();
