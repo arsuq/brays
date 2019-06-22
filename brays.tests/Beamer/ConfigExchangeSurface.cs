@@ -8,7 +8,7 @@ namespace brays.tests
 {
 	class ConfigExchangeSurface : ITestSurface
 	{
-		public string Info => "Tests the config exchange in LockOn.";
+		public string Info => "Tests the config exchange.";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }

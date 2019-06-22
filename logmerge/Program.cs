@@ -15,25 +15,25 @@ namespace logmerge
 		{
 			if (args.Length < 2)
 			{
-				var fc = Console.ForegroundColor;
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("Missing one or both file paths.");
-				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine();
-				Console.WriteLine(" > Pass two brays log file paths to merge the received traces from the second log. ");
-				Console.WriteLine(" > Pass two bx    log file paths to merge the replies from the second log with the first one.");
-				Console.WriteLine($" The output will be saved as the source file with the {SAVEAS_SUFFIX} suffix.");
-				Console.WriteLine(" The result trace order helps tracking exchanges from the sender's point of view, ");
-				Console.WriteLine(" so one may need to apply the reverse merge as well. ");
+				"Missing one or both file paths.".AsError();
 
-				Console.WriteLine();
-				Console.ForegroundColor = fc;
+				Print.Line();
+
+				" > Pass two brays log file paths to merge the received traces from the second log. ".AsHelp();
+				" > Pass two bx    log file paths to merge the replies from the second log with the first one.".AsHelp();
+				$" The output will be saved as the source file with the {SAVEAS_SUFFIX} suffix.".AsHelp();
+				" The result trace order helps tracking exchanges from the sender's point of view, ".AsHelp();
+				" so one may need to apply the reverse merge as well. ".AsHelp();
+
+				Print.Line();
 
 				return;
 			}
 
 			var log1 = args[0];
 			var log2 = args[1];
+
+			var saveas = args.Length > 2 ? args[2] : null;
 
 			var fi1 = new FileInfo(log1);
 			var fi2 = new FileInfo(log2);
@@ -44,7 +44,12 @@ namespace logmerge
 
 			var isBX = fi1.Extension == BX_EXT;
 
-			Console.WriteLine($"Will merge {log2} as replies to {log1} as main.");
+			Print.Line();
+
+			$"  Source: {log1} ".AsWarn();
+			$" Replies: {log2} ".AsWarn();
+
+			Print.Line();
 
 			try
 			{
@@ -86,16 +91,33 @@ namespace logmerge
 						$"# Merge of the received frames in {fi2.Name} " +
 						$"(remote) interleaved with the {fi1.Name} (source) log.");
 					sb.AppendLine($"# Only :i traces are taken from the remote log (marked with :r).");
+					sb.AppendLine("# The duplicated retry-frame responses are removed from all but the last out frame.");
 				}
+
+				// When frames are dropped there will be multiple lines with the same ID.
+				// To avoid repeating all of the replies after each retry, all of them are
+				// added after the last out frame.
+
+				var retriesMap = new Dictionary<int, int>();
+				var paLines = new List<Line>();
 
 				foreach (var l in aLines)
 				{
-					sb.AppendLine(l);
+					var pl = parseLine(l);
+					paLines.Add(pl);
 
-					var line = parseLine(l);
+					if (pl.Direction != FrameDirection.Out) continue;
+					if (!retriesMap.ContainsKey(pl.FrameID))
+						retriesMap[pl.FrameID] = 0;
 
+					retriesMap[pl.FrameID]++;
+				}
+
+				foreach (var line in paLines)
+				{
+					sb.AppendLine(line.OriginalText);
 					// Get the remote INs, if any and print all received frames with that ID
-					if (line.Direction == FrameDirection.Out && bIndex.ContainsKey(line.FrameID))
+					if (line.Direction == FrameDirection.Out && bIndex.ContainsKey(line.FrameID) && --retriesMap[line.FrameID] < 1)
 						foreach (var r in bIndex[line.FrameID])
 						{
 							var C = r.ToCharArray();
@@ -104,14 +126,17 @@ namespace logmerge
 						}
 				}
 
-				var saveAs = Path.Combine(fi1.DirectoryName, $"{fi1.Name}-{SAVEAS_SUFFIX}{fi1.Extension}");
+				if (!string.IsNullOrWhiteSpace(saveas))
+					saveas = $"{saveas}{fi1.Extension}";
+				else
+					saveas = Path.Combine(fi1.DirectoryName, $"{fi1.Name}-{SAVEAS_SUFFIX}{fi1.Extension}");
 
-				File.WriteAllText(saveAs, sb.ToString());
-				Console.WriteLine($"Merge saved as {saveAs}");
+				File.WriteAllText(saveas, sb.ToString());
+				$"Merge saved as {saveas}".AsSuccess();
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"Parsing failed with error {ex.Message}");
+				$"Parsing failed with error {ex.Message}".AsError();
 			}
 		}
 

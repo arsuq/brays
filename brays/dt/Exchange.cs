@@ -130,6 +130,8 @@ namespace brays
 		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
 		public XFlags ExchangeFlags => (XFlags)Flags;
 		public XState State => (XState)state;
+		public bool RawBits => (ExchangeFlags & XFlags.NoSerialization) == XFlags.NoSerialization;
+		public bool NoReply => (ExchangeFlags & XFlags.DoNotReply) == XFlags.DoNotReply;
 
 		public bool IsOK => ErrorCode == 0;
 

@@ -70,7 +70,7 @@ namespace brays.tests
 
 			try
 			{
-				b.RegisterAPI<(byte[] data, byte[] hash)>(F, verify_hash);
+				b.RegisterAPI(F, verify_hash);
 
 				 a.Start(s, t);
 				 b.Start(t, s);
@@ -98,12 +98,14 @@ namespace brays.tests
 			}
 		}
 
-		void verify_hash(Exchange<(byte[] data, byte[] hash)> ix)
+		void verify_hash(Exchange ix)
 		{
-			var md5 = MD5.Create().ComputeHash(ix.Arg.data);
-			var eql = Assert.SameValues(md5, ix.Arg.hash);
+			var tpl = ix.Make<(byte[] data, byte[] hash)>();
 
-			ix.Instance.XPU.Reply(ix.Instance, eql).Wait();
+			var md5 = MD5.Create().ComputeHash(tpl.data);
+			var eql = Assert.SameValues(md5, tpl.hash);
+
+			ix.XPU.Reply(ix, eql);
 		}
 	}
 }

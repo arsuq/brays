@@ -34,12 +34,10 @@ namespace brays.tests
 				 new HeapHighway(ushort.MaxValue)));
 
 			const string ADD_ONE = "addOne";
-			const string ADD_ONE_GEN = "addOneGen";
 
 			try
 			{
 				b.RegisterAPI(ADD_ONE, add_one);
-				b.RegisterAPI<int>(ADD_ONE_GEN, add_oneg);
 
 				a.Start(s, t);
 				b.Start(t, s);
@@ -49,14 +47,6 @@ namespace brays.tests
 
 				using (var ix = await a.Request(ADD_ONE, 3))
 					if (!ix.IsOK || ix.Make<int>() != 4)
-					{
-						Passed = false;
-						FailureMessage = "Request failure.";
-						return;
-					}
-
-				using (var ix = await a.Request(ADD_ONE_GEN, 8))
-					if (!ix.IsOK || ix.Make<int>() != 9)
 					{
 						Passed = false;
 						FailureMessage = "Request failure.";
@@ -84,15 +74,7 @@ namespace brays.tests
 
 			data++;
 
-			ix.XPU.Reply(ix, data);
-		}
-
-		void add_oneg(Exchange<int> ix)
-		{
-			// Implicit cast as T
-			int v = ix;
-
-			ix.Instance.Reply(++v);
+			ix.Reply(data);
 		}
 	}
 }

@@ -140,10 +140,11 @@ namespace brays
 		}
 
 		public async Task<bool> ConfigExchange(int refID = 0, bool awaitRemote = false)
-		{
+		{	
+			// [i] If the refID is 0 the cfg lead is treated as a request.
+
 			var sf = refID > 0 ? outHighway.Alloc(CfgX.LENGTH) : null;
 
-			// If the refID is 0 the cfg is treated as a request.
 			if (refID > 0)
 			{
 				var cfgx = new CfgX(cfg, source);

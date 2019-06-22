@@ -61,20 +61,25 @@ namespace brays
 
 		public Task<bool> TargetIsActive(int timeout = -1) => beamer.TargetIsActive(timeout);
 
-		public Task<Exchange> Request(Exchange ox, TimeSpan rplTimeout = default)
+		public Task<Exchange> Request(Exchange ox, TimeSpan timeout = default)
 		{
 			var tc = new TaskCompletionSource<Exchange>();
 
-			if (rplTimeout != default && rplTimeout != Timeout.InfiniteTimeSpan) Task.Delay(rplTimeout).ContinueWith((_) =>
+			if (timeout != default && timeout != Timeout.InfiniteTimeSpan) Task.Delay(timeout).ContinueWith((_) =>
 			{
 				var tx = new Exchange((int)XPUErrorCode.Timeout);
 				if (tc.TrySetResult(tx)) trace(tx);
 			});
 
-			refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
+			if (!ox.NoReply)
 			{
-				if (tc.TrySetResult(ix)) trace(ix);
-			}));
+
+
+				refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
+				{
+					if (tc.TrySetResult(ix)) trace(ix);
+				}));
+			}
 
 			Task.Run(async () =>
 			{
@@ -82,6 +87,7 @@ namespace brays
 				{
 					ox.Mark(XState.Beamed);
 					trace(ox);
+					if (ox.NoReply) tc.TrySetResult(ox);
 				}
 				else
 				{
@@ -93,58 +99,48 @@ namespace brays
 			return tc.Task;
 		}
 
-		public Task<Exchange> Request(string res, bool doNotReply = false, TimeSpan rplTimeout = default)
+		public Task<Exchange> Request(string res, bool doNotReply = false, TimeSpan timeout = default)
 		{
 			var flags = doNotReply ? (int)XFlags.DoNotReply : 0;
-			return Request(new Exchange(this, 0, flags, 0, res, default, cfg.outHighway), rplTimeout);
+			return Request(new Exchange(this, 0, flags, 0, res, default, cfg.outHighway), timeout);
 		}
 
-		public Task<Exchange> Request<O>(string res, O arg, bool doNotReply = false, TimeSpan rplTimeout = default)
+		public Task<Exchange> Request<O>(string res, O arg, bool doNotReply = false, TimeSpan timeout = default)
 		{
 			var flags = doNotReply ? (int)XFlags.DoNotReply : 0;
-			return Request(new Exchange<O>(this, 0, flags, 0, res, arg, cfg.outHighway), rplTimeout);
+			return Request(new Exchange<O>(this, 0, flags, 0, res, arg, cfg.outHighway), timeout);
 		}
 
-		public Task<Exchange> RequestRaw(string res, Span<byte> arg, bool doNotReply = false, TimeSpan rplTimeout = default)
+		public Task<Exchange> RawRequest(string res, Span<byte> arg, bool doNotReply = false, TimeSpan timeout = default)
 		{
 			XFlags flags = XFlags.NoSerialization;
 
 			if (doNotReply) flags = flags | XFlags.DoNotReply;
 
-			return Request(new Exchange(this, 0, (int)flags, 0, res, arg, cfg.outHighway), rplTimeout);
+			return Request(new Exchange(this, 0, (int)flags, 0, res, arg, cfg.outHighway), timeout);
 		}
 
 		public Task<Exchange> Reply<O>(Exchange x, O arg, bool doNotReply = false,
-			bool disposex = true, TimeSpan rplTimeout = default)
+			bool disposex = true, TimeSpan timeout = default)
 		{
 			if (disposex) x.Dispose();
 
 			XFlags flags = XFlags.IsReply;
 			if (doNotReply) flags = flags | XFlags.DoNotReply;
 
-			return Request(new Exchange<O>(this, x.ID, (int)flags, 0, string.Empty, arg, cfg.outHighway), rplTimeout);
+			return Request(new Exchange<O>(this, x.ID, (int)flags, 0, string.Empty, arg, cfg.outHighway), timeout);
 		}
 
-		public Task<Exchange> ReplyRaw(Exchange x, Span<byte> arg, bool doNotReply = false,
-			bool disposex = true, TimeSpan rplTimeout = default)
+		public Task<Exchange> RawReply(Exchange x, Span<byte> arg, bool doNotReply = false,
+			bool disposex = true, TimeSpan timeout = default)
 		{
 			if (disposex) x.Dispose();
 
 			XFlags flags = XFlags.IsReply | XFlags.NoSerialization;
 			if (doNotReply) flags = flags | XFlags.DoNotReply;
 
-			return Request(new Exchange(this, x.ID, (int)flags, 0, string.Empty, arg, cfg.outHighway), rplTimeout);
+			return Request(new Exchange(this, x.ID, (int)flags, 0, string.Empty, arg, cfg.outHighway), timeout);
 		}
-
-		public bool RegisterAPI<T>(string key, Func<Exchange<T>, Task> f) =>
-			resAPIs.TryAdd(key, (x) => (x != null) ? f(new Exchange<T>(this, x.Fragment)) : f(null));
-
-		public bool RegisterAPI<T>(string key, Action<Exchange<T>> f) =>
-			resAPIs.TryAdd(key, (x) => Task.Run(() =>
-			 {
-				 if (x != null) f(new Exchange<T>(this, x.Fragment));
-				 else f(null);
-			 }));
 
 		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, (ix) => Task.Run(() => f(ix)));
 

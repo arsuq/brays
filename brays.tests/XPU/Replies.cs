@@ -8,11 +8,13 @@ namespace brays.tests
 {
 	class Replies : ITestSurface
 	{
-		public string Info => "Tests reply sequencing.";
+		public string Info => "Smoke tests reply sequencing with RawRequest-RawReply.";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
+
+		readonly TimeSpan TIMEOUT = TimeSpan.FromMilliseconds(1000);
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
@@ -29,9 +31,11 @@ namespace brays.tests
 				 new XLogCfg("b", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 
+			MarshalSlot ms = null;
+
 			try
 			{
-				b.RegisterAPI<int>("ep", entry_point);
+				b.RegisterAPI("ep", entry_point);
 
 				a.Start(s, t);
 				b.Start(t, s);
@@ -39,26 +43,36 @@ namespace brays.tests
 				await a.TargetIsActive();
 				await b.TargetIsActive();
 
-				var ms = new MarshalSlot(4);
-				ms.Write(33, 0);
+				ms = MarshalSlot.Store(8);
 
-				var x = await a.RequestRaw("ep", ms);
-				var data = ms.ToSpan<int>()[0];
+				var x = await a.RawRequest("ep", ms, false, TIMEOUT);
+				int data = 0;
+				x.Fragment.Read(ref data, x.DataOffset);
 
-				while (data >= 0)
+				while (data > 0 && !x.NoReply)
 				{
 					data--;
 					ms.Write(data, 0);
 
-					x = await x.ReplyRaw(ms);
+					x = await x.RawReply(ms, data < 1, true, TIMEOUT);
 
-					if (!x.IsOK) break;
+					if (!x.IsOK)
+					{
+						Passed = false;
+						FailureMessage = "Timeout";
+						return;
+					}
 
-					x.Fragment.Read(ref data, x.DataOffset);
+					if (x.State == XState.Beamed) x.Fragment.Read(ref data, x.DataOffset);
 				}
 
-				Passed = true;
-				IsComplete = true;
+				await Task.Delay(TIMEOUT.Milliseconds * 3);
+
+				if (!Passed.HasValue)
+				{
+					Passed = true;
+					IsComplete = true;
+				}
 			}
 			catch (Exception ex)
 			{
@@ -69,24 +83,43 @@ namespace brays.tests
 			{
 				a.Dispose();
 				b.Dispose();
+				ms.Dispose();
 			}
 		}
 
-		async Task entry_point(Exchange<int> ix)
+		async Task entry_point(Exchange ix)
 		{
-			var data = ix.Arg;
+			if (!ix.RawBits) throw new ArgumentException("rawBits");
+
 			var ms = new MarshalSlot(4);
 			Exchange x = ix;
+			int data = 0;
 
-			while (data >= 0)
+			try
 			{
-				data--;
-				ms.Write(data, 0);
-				x = await x.ReplyRaw(ms);
-
-				if (!x.IsOK) break;
-
 				x.Fragment.Read(ref data, x.DataOffset);
+
+				while (data > 0 && !x.NoReply)
+				{
+					data--;
+
+					ms.Write(data, 0);
+					x = await x.RawReply(ms, data < 1, true, TIMEOUT);
+
+					if (!x.IsOK)
+					{
+						Passed = false;
+						FailureMessage = "Timeout";
+						return;
+					}
+
+					if (x.State == XState.Beamed) x.Fragment.Read(ref data, x.DataOffset);
+				}
+			}
+			finally
+			{
+				ms.Dispose();
+				x.Dispose();
 			}
 		}
 	}
