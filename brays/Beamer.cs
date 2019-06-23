@@ -139,43 +139,49 @@ namespace brays
 			return r;
 		}
 
-		public async Task<bool> ConfigExchange(int refID = 0, bool awaitRemote = false)
-		{	
-			// [i] If the refID is 0 the cfg lead is treated as a request.
-
-			var sf = refID > 0 ? outHighway.Alloc(CfgX.LENGTH) : null;
-
-			if (refID > 0)
-			{
-				var cfgx = new CfgX(cfg, source);
-				cfgx.Write(sf);
-			}
-
-			var fid = Interlocked.Increment(ref frameCounter);
-			var rst = new ResetEvent(false);
+		/// <summary>
+		/// If it's a request, awaits for the remote config, otherwise sends the source config.
+		/// In case the target endpoint has changed will LockOn the new one.
+		/// </summary>
+		/// <param name="isRequest">If false, sends the source config.</param>
+		/// <returns>False if fails.</returns>
+		public async Task<bool> ConfigExchange(int reqID, bool isRequest)
+		{
+			MemoryFragment sf = null;
+			ResetEvent rst = null;
 
 			try
 			{
-				if (awaitRemote)
+				if (!isRequest)
 				{
-					void cfgReceived(MemoryFragment frag)
+					var cfgx = new CfgX(cfg, source);
+
+					sf = outHighway.Alloc(CfgX.LENGTH);
+					cfgx.Write(sf);
+				}
+				else rst = new ResetEvent();
+
+				var fid = Interlocked.Increment(ref frameCounter);
+
+
+				if (!isRequest) return await tilex((byte)Lead.Cfg, sf, null, 0, 0, reqID, fid)
+						.ConfigureAwait(false) == (int)SignalKind.ACK;
+				else
+				{
+					if (await tilex((byte)Lead.CfgReq, sf, null, 0, 0, 0, fid, (f) =>
 					{
 						rst.Set();
-						if (frag != null) frag.Dispose();
+						if (f != null) f.Dispose();
+					}).ConfigureAwait(false) != (int)SignalKind.ACK) return false;
 
-						var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
-						if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
-					}
-
-					var mark = await tilex((byte)Lead.Cfg, sf, null, 0, 0,
-						refID, fid, cfgReceived).ConfigureAwait(false);
-
-					if (mark != (int)SignalKind.ACK) return false;
-
-					return await rst.Wait(cfg.ConfigExchangeTimeout).ConfigureAwait(false) > 0;
+					return await rst.Wait(cfg.ConfigExchangeTimeout) > 0;
 				}
-				else return await tilex((byte)Lead.Cfg, sf, null, 0, 0, refID, fid)
-						.ConfigureAwait(false) == (int)SignalKind.ACK;
+			}
+			catch (AggregateException aex)
+			{
+				trace("Ex", "ConfigExchange", aex.Flatten().ToString());
+
+				return false;
 			}
 			finally
 			{
@@ -654,24 +660,6 @@ namespace brays
 			else return false;
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void procProbe()
-		{
-			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
-			probeReqAwait.Set();
-			probeReqAwait.Reset();
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		void procProbeReq()
-		{
-			try
-			{
-				socket.Send(probeLead);
-			}
-			catch { }
-		}
-
 		void procFrame(MemoryFragment f)
 		{
 			try
@@ -690,6 +678,7 @@ namespace brays
 					case Lead.Status: procStatus(f); break;
 					case Lead.Tile: procTileX(f); break;
 					case Lead.Cfg: procCfgX(f); break;
+					case Lead.CfgReq: procCfgReq(f); break;
 					case Lead.Pulse: procPulse(f); break;
 					default:
 					{
@@ -710,6 +699,71 @@ namespace brays
 			{
 				f.Dispose();
 			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		void procProbe()
+		{
+			Volatile.Write(ref lastReceivedProbeTick, DateTime.Now.Ticks);
+			probeReqAwait.Set();
+			probeReqAwait.Reset();
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		void procProbeReq()
+		{
+			try
+			{
+				socket.Send(probeLead);
+			}
+			catch { }
+		}
+
+		void procCfgReq(MemoryFragment frag)
+		{
+			var f = new TILEX(frag.Span());
+#if DEBUG
+			if (cfg.dropFrame())
+			{
+				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
+					trace(TraceOps.DropFrame, f.FrameID, $"Cfg R: {f.RefID}");
+				return;
+			}
+#endif
+			if (isClone(TraceOps.ProcTile, f.FrameID)) return;
+			signal(f.FrameID, (int)SignalKind.ACK);
+
+			if (((TraceOps.ProcTile & cfg.Log.Flags) == TraceOps.ProcTile && cfg.Log.IsEnabled))
+				trace(TraceOps.ProcTile, f.FrameID, "K: CfgReq");
+
+			ConfigExchange(f.FrameID, false).Wait();
+		}
+
+		void procCfgX(MemoryFragment frag)
+		{
+			var f = new TILEX(frag.Span());
+#if DEBUG
+			if (cfg.dropFrame())
+			{
+				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
+					trace(TraceOps.DropFrame, f.FrameID, $"Cfg R: {f.RefID}");
+				return;
+			}
+#endif
+			if (isClone(TraceOps.ProcTile, f.FrameID)) return;
+			signal(f.FrameID, (int)SignalKind.ACK);
+
+			var tcfg = new CfgX(f.Data);
+
+			targetCfgUpdate(tcfg);
+
+			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) && ta.OnTileExchange != null)
+				ta.OnTileExchange(null);
+
+			if (((TraceOps.ProcTile & cfg.Log.Flags) == TraceOps.ProcTile && cfg.Log.IsEnabled))
+				trace(TraceOps.ProcTile, f.FrameID, $"K: Cfg " +
+				$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
+				$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
 		}
 
 		void procTileX(MemoryFragment frag)
@@ -802,36 +856,6 @@ namespace brays
 			catch (Exception ex)
 			{
 				trace("Ex", "ProcPack", ex.ToString());
-			}
-		}
-
-		void procCfgX(MemoryFragment frag)
-		{
-			var f = new TILEX(frag.Span());
-#if DEBUG
-			if (cfg.dropFrame())
-			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, f.FrameID, $"Cfg R: {f.RefID}");
-				return;
-			}
-#endif
-			if (isClone(TraceOps.ProcTile, f.FrameID)) return;
-			signal(f.FrameID, (int)SignalKind.ACK);
-
-			if (f.Data.Length == 0) ConfigExchange(f.FrameID).Wait();
-			else
-			{
-				var tcfg = new CfgX(f.Data);
-				Volatile.Write(ref targetCfg, tcfg);
-
-				if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) && ta.OnTileExchange != null)
-					ta.OnTileExchange(null);
-
-				if (((TraceOps.ProcTile & cfg.Log.Flags) == TraceOps.ProcTile && cfg.Log.IsEnabled))
-					trace(TraceOps.ProcTile, f.FrameID, $"K: Cfg " +
-					$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
-					$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
 			}
 		}
 
@@ -999,6 +1023,20 @@ namespace brays
 					}
 					catch { }
 				else if (logop) trace(TraceOps.ProcSignal, sg.FrameID, $"NoAwait M: {sg.Mark} R: {sg.RefID}");
+			}
+		}
+
+		void targetCfgUpdate(CfgX tcfg)
+		{
+			lock (cfgUpdateLock)
+			{
+				targetCfg = tcfg;
+				var tep = tcfg.EndPoint;
+
+				var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
+				if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
+
+				if (!tep.Equals(target)) LockOn(source, tep);
 			}
 		}
 
@@ -1249,6 +1287,7 @@ namespace brays
 		ManualResetEvent probeReqAwait = new ManualResetEvent(false);
 		ManualResetEventSlim lockOnRst = new ManualResetEventSlim(true);
 		Gate lockOnGate = new Gate();
+		object cfgUpdateLock = new object();
 		Task probingTask;
 		Task cleanupTask;
 		Task[] receivers;

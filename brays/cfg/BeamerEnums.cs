@@ -16,6 +16,7 @@ namespace brays
 		Block,
 		Status,
 		Cfg,
+		CfgReq,
 		Tile,
 		Pulse
 	}

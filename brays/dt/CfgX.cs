@@ -52,6 +52,18 @@ namespace brays
 			return new CfgX(buff);
 		}
 
+		public IPEndPoint EndPoint => new IPEndPoint(Address, Port);
+
+		public IPAddress Address
+		{
+			get
+			{
+				var ip = IsIPv4 ? IP.AsSpan<byte>().Slice(0, 4) : IP;
+				return new IPAddress(ip);
+			}
+		}
+
+
 		public const int LENGTH = 37;
 
 		public ushort TileSizeBytes;
