@@ -17,12 +17,19 @@ namespace brays.tests
 
 		public async Task Run(IDictionary<string, List<string>> args)
 		{
+#if !DEBUG
+			return;
+#endif
+			const int DROPPED_FRAMES_PERCENT = 20;
+
+			$"Will test abrupt port change on the source while dropping {DROPPED_FRAMES_PERCENT} percent of the tiles ".AsHelp();
+
 			Beamer rayA = null;
 			Beamer rayB = null;
 
 			var rst = new ManualResetEvent(false);
 			var rdm = new Random();
-			var data = new byte[50_000_000];
+			var data = new byte[150_000_000];
 			byte[] hash = null;
 
 			rdm.NextBytes(data);
@@ -61,7 +68,7 @@ namespace brays.tests
 						Log = new BeamerLogCfg("rayA", targ.Log),
 #if DEBUG
 						dropFrames = true,
-						deopFramePercent = 20
+						deopFramePercent = DROPPED_FRAMES_PERCENT
 #endif
 					});
 
@@ -71,7 +78,7 @@ namespace brays.tests
 						Log = new BeamerLogCfg("rayB", targ.Log),
 #if DEBUG
 						dropFrames = true,
-						deopFramePercent = 20
+						deopFramePercent = DROPPED_FRAMES_PERCENT
 #endif
 					});
 
@@ -82,13 +89,29 @@ namespace brays.tests
 						rayA.LockOn(aep, bep);
 						await rayA.TargetIsActive();
 
+						Task.Delay(50).ContinueWith((t) =>
+						{
+							rayA.Source.Port = 9999;
+							if (!rayA.ConfigPush().Result)
+							{
+								Passed = false;
+								FailureMessage = "Faiiled to push the updated config";
+								rst.Set();
+							}
+							else
+							{
+								rayA.LockOn(rayA.Source, rayA.Target);
+								$"The source port was changed and the beamer locked on {rayA.Source.ToString()}".AsWarn();
+							}
+						});
+
 						if (!await rayA.Beam(new HeapSlot(data)))
 						{
 							FailureMessage = "Failed to beam the bits";
 							Passed = false;
 							rst.Set();
 						}
-						else "Beamed".AsInfo();
+						else $"{data.Length / 1000} KB beamed".AsInfo();
 					});
 
 					ta.Start();

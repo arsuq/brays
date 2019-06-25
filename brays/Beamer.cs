@@ -39,7 +39,6 @@ namespace brays
 				try
 				{
 					if (cancel != null) cancel.Cancel();
-					Interlocked.Exchange(ref stop, 1);
 					lockOnGate.Exit();
 					outHighway?.Dispose();
 					blockHighway?.Dispose();
@@ -101,9 +100,9 @@ namespace brays
 					this.source = listen;
 					this.target = target;
 
-					if (socket != null && socket.Connected) socket.Disconnect(true);
-					else socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+					if (socket != null ) socket.Dispose();
 
+					socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 					socket.Bind(this.source);
 					socket.Connect(target);
 					socket.ReceiveBufferSize = cfg.ReceiveBufferSize;
@@ -234,7 +233,7 @@ namespace brays
 		}
 
 		public readonly Guid ID;
-		public bool IsStopped => Volatile.Read(ref stop) > 0;
+		public bool IsStopped => cancel.IsCancellationRequested;
 		public bool IsDisposed => Volatile.Read(ref isDisposed) > 0;
 		public bool IsTargetLocked => isLocked;
 		public int FrameCounter => frameCounter;
@@ -260,7 +259,7 @@ namespace brays
 
 					try
 					{
-						if (Volatile.Read(ref b.isRejected) || Volatile.Read(ref stop) > 0)
+						if (Volatile.Read(ref b.isRejected) || IsStopped)
 						{
 							trace("Beam", "Stopped");
 							return 0;
@@ -391,7 +390,7 @@ namespace brays
 		{
 			try
 			{
-				if (Volatile.Read(ref stop) > 0) return (int)SignalKind.NOTSET;
+				if (IsStopped) return (int)SignalKind.NOTSET;
 
 				var fid = Interlocked.Increment(ref frameCounter);
 				var len = (tileMap != null ? tileMap.Length : 0) + STATUS.HEADER;
@@ -422,7 +421,7 @@ namespace brays
 						if (blocks.TryGetValue(blockID, out Block b) && tileMap != null)
 							map = $"M: {b.tileMap.ToString()} ";
 
-						for (int i = 0; i < cfg.SendRetries && Volatile.Read(ref stop) < 1; i++)
+						for (int i = 0; i < cfg.SendRetries && !IsStopped; i++)
 						{
 							if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
@@ -486,7 +485,7 @@ namespace brays
 			else dLen = dataLen;
 
 			if (dataLen > cfg.TileSizeBytes) throw new ArgumentException("data size");
-			if (Volatile.Read(ref stop) > 0) return (int)SignalKind.NOTSET;
+			if (IsStopped) return (int)SignalKind.NOTSET;
 
 			var rst = new ResetEvent();
 
@@ -514,7 +513,7 @@ namespace brays
 
 					var awaitMS = cfg.RetryDelayStartMS;
 
-					for (int i = 0; i < cfg.SendRetries && Volatile.Read(ref stop) < 1; i++)
+					for (int i = 0; i < cfg.SendRetries && !IsStopped; i++)
 					{
 						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
@@ -537,7 +536,7 @@ namespace brays
 			Action<MemoryFragment> onTileXAwait = null)
 		{
 			if (data.Length > cfg.TileSizeBytes) throw new ArgumentException("data size");
-			if (Volatile.Read(ref stop) > 0) return;
+			if (IsStopped) return;
 
 			if (fid == 0) fid = Interlocked.Increment(ref frameCounter);
 			var len = data.Length + TILEX.HEADER;
@@ -1056,7 +1055,7 @@ namespace brays
 			await Task.Yield();
 
 			if (cfg.EnableProbes)
-				while (Volatile.Read(ref stop) < 1 && Volatile.Read(ref cfg.EnableProbes))
+				while (!IsStopped && Volatile.Read(ref cfg.EnableProbes))
 					try
 					{
 						if (lockOnGate.IsAcquired) lockOnRst.Wait();
@@ -1071,7 +1070,7 @@ namespace brays
 			await Task.Yield();
 
 			using (var inHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX))
-				while (Volatile.Read(ref stop) < 1 && !cancel.IsCancellationRequested)
+				while (!IsStopped)
 					try
 					{
 						if (lockOnGate.IsAcquired) lockOnRst.Wait();
@@ -1165,7 +1164,7 @@ namespace brays
 				int c = 0;
 				var logop = (TraceOps.ReqTiles & cfg.Log.Flags) == TraceOps.ReqTiles && cfg.Log.IsEnabled;
 
-				while (Volatile.Read(ref stop) < 1 && !b.IsComplete && !b.isFaulted && !b.isRejected)
+				while (!IsStopped && !b.IsComplete && !b.isFaulted && !b.isRejected)
 				{
 					await Task.Delay(cfg.WaitAfterAllSentMS).ConfigureAwait(false);
 
@@ -1197,7 +1196,7 @@ namespace brays
 			{
 				var logop = (TraceOps.AutoPulse & cfg.Log.Flags) == TraceOps.AutoPulse && cfg.Log.IsEnabled;
 
-				while (Volatile.Read(ref stop) < 1)
+				while (!IsStopped)
 				{
 					autoPulseRst.Reset();
 					autoPulseRst.Wait();
@@ -1290,7 +1289,6 @@ namespace brays
 		int frameCounter;
 		int blockCounter;
 		int receivedDgrams;
-		int stop;
 		int retries;
 		bool isLocked;
 		int isDisposed;
