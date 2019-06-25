@@ -21,7 +21,7 @@ namespace brays
 		{
 			this.cfg = cfg;
 			this.beamer = new Beamer(onReceive, cfg.bcfg);
-			resAPIs = new ConcurrentDictionary<string, Func<Exchange, Task>>();
+			resAPIs = new ConcurrentDictionary<string, ResFunction>();
 			refAwaits = new ConcurrentDictionary<int, ExchangeAwait>();
 
 			if (cfg.log != null && cfg.log.IsEnabled)
@@ -142,9 +142,9 @@ namespace brays
 			return Request(new Exchange(this, x.ID, (int)flags, 0, string.Empty, arg, cfg.outHighway), timeout);
 		}
 
-		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, (ix) => Task.Run(() => f(ix)));
+		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, new ResFunction(f));
 
-		public bool RegisterAPI(string key, Func<Exchange, Task> f) => resAPIs.TryAdd(key, f);
+		public bool RegisterAPI(string key, Func<Exchange, Task> f) => resAPIs.TryAdd(key, new ResFunction(f));
 
 		public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _);
 
@@ -163,8 +163,7 @@ namespace brays
 		void onReceive(MemoryFragment f)
 		{
 			// [!] The disposing is left to the handlers,
-			// so that async work wouldn't require a fragment copy,
-			// unless an exception is thrown.
+			// so that async work wouldn't require a fragment copy.
 
 			try
 			{
@@ -189,10 +188,13 @@ namespace brays
 						x.Dispose();
 					}
 				}
-				else if (resAPIs.TryGetValue(x.ResID, out Func<Exchange, Task> action))
+				else if (resAPIs.TryGetValue(x.ResID, out ResFunction rf))
 				{
 					x.Mark(XState.Processing);
-					action(x).Wait();
+
+
+					if (rf.Func != null) rf.Func(x);
+					else rf.Action(x);
 				}
 			}
 			catch (AggregateException aex)
@@ -279,7 +281,7 @@ namespace brays
 		Task cleanupTask;
 
 		List<string> remoteAPI;
-		ConcurrentDictionary<string, Func<Exchange, Task>> resAPIs;
+		ConcurrentDictionary<string, ResFunction> resAPIs;
 		ConcurrentDictionary<int, ExchangeAwait> refAwaits;
 
 		int exchangeID;

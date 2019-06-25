@@ -38,10 +38,13 @@ namespace brays
 			if (Interlocked.CompareExchange(ref isDisposed, 1, 0) == 0)
 				try
 				{
+					if (cancel != null) cancel.Cancel();
 					Interlocked.Exchange(ref stop, 1);
+					lockOnGate.Exit();
 					outHighway?.Dispose();
 					blockHighway?.Dispose();
 					tileXHigheay?.Dispose();
+					socket?.Close();
 					socket?.Dispose();
 					outHighway = null;
 					blockHighway = null;
@@ -93,12 +96,14 @@ namespace brays
 					Volatile.Write(ref isLocked, false);
 					lockOnRst.Reset();
 
+					cancel = new CancellationTokenSource();
+
 					this.source = listen;
 					this.target = target;
 
-					if (socket != null) socket.Close();
+					if (socket != null && socket.Connected) socket.Disconnect(true);
+					else socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
-					socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 					socket.Bind(this.source);
 					socket.Connect(target);
 					socket.ReceiveBufferSize = cfg.ReceiveBufferSize;
@@ -140,12 +145,17 @@ namespace brays
 		}
 
 		/// <summary>
-		/// If it's a request, awaits for the remote config, otherwise sends the source config.
-		/// In case the target endpoint has changed will LockOn the new one.
+		/// Awaits for the remote config.
 		/// </summary>
-		/// <param name="isRequest">If false, sends the source config.</param>
-		/// <returns>False if fails.</returns>
-		public async Task<bool> ConfigExchange(int reqID, bool isRequest)
+		public Task<bool> ConfigRequest() => configExchange(0, true);
+
+		/// <summary>
+		/// Updates the target with the current config.
+		/// If the listen endpoint setting has changed, the target beamer will LockOn the new one.
+		/// </summary>
+		public Task<bool> ConfigPush() => configExchange(0, false);
+
+		async Task<bool> configExchange(int reqID, bool isRequest)
 		{
 			MemoryFragment sf = null;
 			ResetEvent rst = null;
@@ -736,7 +746,7 @@ namespace brays
 			if (((TraceOps.ProcTile & cfg.Log.Flags) == TraceOps.ProcTile && cfg.Log.IsEnabled))
 				trace(TraceOps.ProcTile, f.FrameID, "K: CfgReq");
 
-			ConfigExchange(f.FrameID, false).Wait();
+			configExchange(f.FrameID, false).Wait();
 		}
 
 		void procCfgX(MemoryFragment frag)
@@ -754,7 +764,6 @@ namespace brays
 			signal(f.FrameID, (int)SignalKind.ACK);
 
 			var tcfg = new CfgX(f.Data);
-
 			targetCfgUpdate(tcfg);
 
 			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) && ta.OnTileExchange != null)
@@ -764,6 +773,8 @@ namespace brays
 				trace(TraceOps.ProcTile, f.FrameID, $"K: Cfg " +
 				$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
 				$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
+
+
 		}
 
 		void procTileX(MemoryFragment frag)
@@ -1036,7 +1047,7 @@ namespace brays
 				var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
 				if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
 
-				if (!tep.Equals(target)) LockOn(source, tep);
+				if (!Source.Equals(target)) LockOn(source, tep);
 			}
 		}
 
@@ -1060,13 +1071,17 @@ namespace brays
 			await Task.Yield();
 
 			using (var inHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX))
-				while (Volatile.Read(ref stop) < 1)
+				while (Volatile.Read(ref stop) < 1 && !cancel.IsCancellationRequested)
 					try
 					{
 						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
 						var frag = inHighway.Alloc(UDP_MAX);
-						var read = await socket.ReceiveAsync(frag, SocketFlags.None).ConfigureAwait(false);
+						var read = await socket.ReceiveAsync(frag, SocketFlags.None, cancel.Token).ConfigureAwait(false);
+
+						// [!] At the time of writing cancellations throw ObjectDisposed ex,
+						// thus the following graceful exit will be bypassed.
+						if (cancel.IsCancellationRequested) break;
 
 						if (read > 0)
 						{
@@ -1086,6 +1101,8 @@ namespace brays
 							else await Task.Delay(cfg.ErrorAwaitMS).ConfigureAwait(false);
 						}
 					}
+					catch (ObjectDisposedException) { }
+					catch (SocketException) { }
 					catch (Exception ex)
 					{
 						trace("Ex", "Receive", ex.ToString());
@@ -1259,6 +1276,7 @@ namespace brays
 			}
 		}
 
+		CancellationTokenSource cancel;
 		Action<MemoryFragment> onReceive;
 		HeapHighway outHighway;
 		IMemoryHighway blockHighway;

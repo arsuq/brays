@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading.Tasks;
 using TestSurface;
 
@@ -51,9 +50,9 @@ namespace brays.tests
 #endif
 				});
 
-				var ta = new Task(() =>
+				var ta = new Task(async () =>
 				{
-					if (rayA.LockOn(aep, bep) && rayA.ConfigExchange(0, true).Result)
+					if (rayA.LockOn(aep, bep) && await rayA.ConfigRequest())
 					{
 						// The remote config must be available here
 						var tc = rayA.GetTargetConfig();
@@ -65,9 +64,9 @@ namespace brays.tests
 					}
 				});
 
-				var tb = new Task(() =>
+				var tb = new Task(async () =>
 				{
-					if (rayB.LockOn(bep, aep) && rayB.ConfigExchange(0, true).Result)
+					if (rayB.LockOn(bep, aep) && await rayB.ConfigRequest())
 					{
 						var tc = rayB.GetTargetConfig();
 						if (tc == null || tc.MaxBeamedTilesAtOnce != CFGA)
