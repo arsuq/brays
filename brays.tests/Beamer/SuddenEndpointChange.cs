@@ -88,22 +88,30 @@ namespace brays.tests
 				{
 					var ta = new Task(async () =>
 					{
-						rayA.LockOn(aep, bep);
-						await rayA.TargetIsActive();
+						await rayA.LockOn(aep, bep, -1);
 
 						Task.Delay(50).ContinueWith((t) =>
 						{
-							rayA.Source.Port = 9999;
-							if (!rayA.ConfigPush().Result)
+							try
+							{
+								rayA.Source.Port = 9999;
+								if (!rayA.ConfigPush().Result)
+								{
+									Passed = false;
+									FailureMessage = "Faiiled to push the updated config";
+									rst.Set();
+								}
+								else
+								{
+									rayA.LockOn(rayA.Source, rayA.Target);
+									$"The source port has changed and the beamer locked on {rayA.Source.ToString()}".AsWarn();
+								}
+							}
+							catch (Exception ex)
 							{
 								Passed = false;
-								FailureMessage = "Faiiled to push the updated config";
+								FailureMessage = ex.ToString();
 								rst.Set();
-							}
-							else
-							{
-								rayA.LockOn(rayA.Source, rayA.Target);
-								$"The source port has changed and the beamer locked on {rayA.Source.ToString()}".AsWarn();
 							}
 						});
 
@@ -117,11 +125,11 @@ namespace brays.tests
 					});
 
 					ta.Start();
+				}
 
-					if (targ.B)
-					{
-						if (!rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
-					}
+				if (targ.B)
+				{
+					if (!rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
 				}
 
 				if (!rst.WaitOne(new TimeSpan(0, 2, 0)))
@@ -130,8 +138,11 @@ namespace brays.tests
 					FailureMessage = "Timeout.";
 				}
 
-				if (!Passed.HasValue) Passed = true;
-				IsComplete = true;
+				if (!Passed.HasValue)
+				{
+					Passed = true;
+					IsComplete = true;
+				}
 			}
 			catch (Exception ex)
 			{

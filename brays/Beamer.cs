@@ -185,9 +185,9 @@ namespace brays
 		/// </summary>
 		/// <param name="listen">The local endpoint.</param>
 		/// <param name="target">The remote endpoint.</param>
-		/// <param name="awaitMS">The timeout is infinite by default (-1).</param>
+		/// <param name="awaitMS">Infinite timeout is -1.</param>
 		/// <returns>False if either LockOn or TargetIsActive return false.</returns>
-		public Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS = -1)
+		public Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS)
 		{
 			if (LockOn(listen, target))
 				return TargetIsActive(awaitMS);
@@ -766,6 +766,7 @@ namespace brays
 			}
 			finally
 			{
+				// [i] Th Block and tileX procs use copies of the fragment.
 				f.Dispose();
 			}
 		}
