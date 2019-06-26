@@ -14,6 +14,9 @@ using System.Threading.Tasks;
 
 namespace brays
 {
+	/// <summary>
+	/// A socket.
+	/// </summary>
 	public class Beamer : IDisposable
 	{
 		public Beamer(Action<MemoryFragment> onReceive, BeamerCfg cfg) : this(cfg)
@@ -42,6 +45,9 @@ namespace brays
 				cfg.Log = new BeamerLogCfg(null, false, 0);
 		}
 
+		/// <summary>
+		/// Can be called concurrently.
+		/// </summary>
 		public void Dispose()
 		{
 			if (Interlocked.CompareExchange(ref isDisposed, 1, 0) == 0)
@@ -66,6 +72,11 @@ namespace brays
 				catch { }
 		}
 
+		/// <summary>
+		/// Sends a probe request and awaits for a probe reply.
+		/// </summary>
+		/// <param name="awaitMS">The default is 2 sec.</param>
+		/// <returns>False if no response was received within the awaitMS time interval.</returns>
 		public bool Probe(int awaitMS = 2000)
 		{
 			if (lockOnGate.IsAcquired) lockOnRst.Wait();
@@ -73,6 +84,11 @@ namespace brays
 			return probeReqAwait.WaitOne(awaitMS);
 		}
 
+		/// <summary>
+		/// Starts a probing loop and awaits for a response. 
+		/// </summary>
+		/// <param name="awaitMS">By default waits forever (-1).</param>
+		/// <returns>False on timeout.</returns>
 		public Task<bool> TargetIsActive(int awaitMS = -1)
 		{
 			var tcs = new TaskCompletionSource<bool>();
@@ -96,6 +112,14 @@ namespace brays
 			return tcs.Task;
 		}
 
+		/// <summary>
+		/// Creates a new socket, starts all listening, cleanup and pulsing tasks. 
+		/// If invoked concurrently only the first call will enter, the rest will 
+		/// return false immediately.
+		/// </summary>
+		/// <param name="listen">The local endpoint.</param>
+		/// <param name="target">The remote endpoint.</param>
+		/// <returns>True on success.</returns>
 		public bool LockOn(IPEndPoint listen, IPEndPoint target)
 		{
 			var r = false;
@@ -132,6 +156,7 @@ namespace brays
 					if (probingTask == null) probingTask = probe();
 					if (cleanupTask == null) cleanupTask = cleanup();
 					if (autoPulseTask == null) autoPulseTask = autoPulse();
+
 					if (ccBeams != null) ccBeams.Dispose();
 					ccBeams = new SemaphoreSlim(cfg.MaxBeamedTilesAtOnce, cfg.MaxBeamedTilesAtOnce);
 
@@ -145,6 +170,7 @@ namespace brays
 				{
 					if (!lockOnRst.IsSet) lockOnRst.Set();
 					trace("Ex", "LockOn", ex.ToString());
+					throw;
 				}
 				finally
 				{
@@ -152,6 +178,21 @@ namespace brays
 				}
 
 			return r;
+		}
+
+		/// <summary>
+		/// Combines LockOn and TargetIsActive().
+		/// </summary>
+		/// <param name="listen">The local endpoint.</param>
+		/// <param name="target">The remote endpoint.</param>
+		/// <param name="awaitMS">The timeout is infinite by default (-1).</param>
+		/// <returns>False if either LockOn or TargetIsActive return false.</returns>
+		public Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS = -1)
+		{
+			if (LockOn(listen, target))
+				return TargetIsActive(awaitMS);
+
+			return Task.FromResult(false);
 		}
 
 		/// <summary>
@@ -165,52 +206,14 @@ namespace brays
 		/// </summary>
 		public Task<bool> ConfigPush() => configExchange(0, false);
 
-		async Task<bool> configExchange(int reqID, bool isRequest)
-		{
-			MemoryFragment sf = null;
-			ResetEvent rst = null;
-
-			try
-			{
-				if (!isRequest)
-				{
-					var cfgx = new CfgX(cfg, source);
-
-					sf = outHighway.Alloc(CfgX.LENGTH);
-					cfgx.Write(sf);
-				}
-				else rst = new ResetEvent();
-
-				var fid = Interlocked.Increment(ref frameCounter);
-
-
-				if (!isRequest) return await tilex((byte)Lead.Cfg, sf, null, 0, 0, reqID, fid)
-						.ConfigureAwait(false) == (int)SignalKind.ACK;
-				else
-				{
-					if (await tilex((byte)Lead.CfgReq, sf, null, 0, 0, 0, fid, (f) =>
-					{
-						rst.Set();
-						if (f != null) f.Dispose();
-					}).ConfigureAwait(false) != (int)SignalKind.ACK) return false;
-
-					return await rst.Wait(cfg.ConfigExchangeTimeout) > 0;
-				}
-			}
-			catch (AggregateException aex)
-			{
-				trace("Ex", "ConfigExchange", aex.Flatten().ToString());
-
-				return false;
-			}
-			finally
-			{
-				if (sf != null) sf.Dispose();
-			}
-		}
-
+		/// <summary>
+		/// Sends a tile in a fire-and-forget manner, i.e. there will be no retries.
+		/// </summary>
+		/// <param name="data">The bits.</param>
+		/// <param name="onTileXAwait">If the tile reaches the target it may reply.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void TileXFF(Span<byte> data) => tilexOnce((byte)Lead.Tile, data, 0, 0, null);
+		public void TileXFF(Span<byte> data, Action<MemoryFragment> onTileXAwait) => 
+			tilexOnce((byte)Lead.Tile, data, 0, 0, onTileXAwait);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public ResetEvent Pulse(Span<byte> data) => pack(data);
@@ -659,6 +662,50 @@ namespace brays
 		}
 
 #endif
+
+		async Task<bool> configExchange(int reqID, bool isRequest)
+		{
+			MemoryFragment sf = null;
+			ResetEvent rst = null;
+
+			try
+			{
+				if (!isRequest)
+				{
+					var cfgx = new CfgX(cfg, source);
+
+					sf = outHighway.Alloc(CfgX.LENGTH);
+					cfgx.Write(sf);
+				}
+				else rst = new ResetEvent();
+
+				var fid = Interlocked.Increment(ref frameCounter);
+
+
+				if (!isRequest) return await tilex((byte)Lead.Cfg, sf, null, 0, 0, reqID, fid)
+						.ConfigureAwait(false) == (int)SignalKind.ACK;
+				else
+				{
+					if (await tilex((byte)Lead.CfgReq, sf, null, 0, 0, 0, fid, (f) =>
+					{
+						rst.Set();
+						if (f != null) f.Dispose();
+					}).ConfigureAwait(false) != (int)SignalKind.ACK) return false;
+
+					return await rst.Wait(cfg.ConfigExchangeTimeout) > 0;
+				}
+			}
+			catch (AggregateException aex)
+			{
+				trace("Ex", "ConfigExchange", aex.Flatten().ToString());
+
+				return false;
+			}
+			finally
+			{
+				if (sf != null) sf.Dispose();
+			}
+		}
 
 		bool isClone(TraceOps op, int frameID, bool signalWithLastReply = true)
 		{
