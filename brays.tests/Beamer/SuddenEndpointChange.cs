@@ -42,8 +42,10 @@ namespace brays.tests
 				var aep = targ.AE;
 				var bep = targ.BE;
 
-				void receive(MemoryFragment f)
+				async Task receive(MemoryFragment f)
 				{
+					await Task.Yield();
+
 					using (var fs = f.CreateStream())
 					{
 						using (MD5 h = MD5.Create())
@@ -101,7 +103,7 @@ namespace brays.tests
 							else
 							{
 								rayA.LockOn(rayA.Source, rayA.Target);
-								$"The source port was changed and the beamer locked on {rayA.Source.ToString()}".AsWarn();
+								$"The source port has changed and the beamer locked on {rayA.Source.ToString()}".AsWarn();
 							}
 						});
 

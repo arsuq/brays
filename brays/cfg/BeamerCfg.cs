@@ -169,6 +169,11 @@ namespace brays
 		/// </summary>
 		public IMemoryHighway TileExchangeHighway;
 
+		/// <summary>
+		/// Where the callback will be scheduled on.
+		/// </summary>
+		public CallbackThread ScheduleCallbacksOn = CallbackThread.Task;
+
 #if DEBUG
 		internal bool dropFrame()
 		{

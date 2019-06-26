@@ -57,5 +57,11 @@ namespace brays
 		/// The trace-enabled ops.
 		/// </summary>
 		public TraceOps Flags;
+
+		/// <summary>
+		/// If true, exceptions from the consumer's callback will be logged.
+		/// The default is false.
+		/// </summary>
+		public bool LogUnhandledCallbackExceptions = false;
 	}
 }

@@ -36,6 +36,16 @@ namespace brays
 		Rejected
 	}
 
+	/// <summary>
+	/// Where the onReceived and onReceivedAsync callbacks will execute.
+	/// </summary>
+	public enum CallbackThread
+	{
+		ThreadPool,
+		Task,
+		SocketThread
+	}
+
 	[Flags]
 	public enum TraceOps : int
 	{

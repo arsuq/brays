@@ -33,7 +33,7 @@ namespace brays.tests
 				var bep = targ.BE;
 
 				rayA = new Beamer(
-					(f) => { Console.WriteLine("?"); },
+					(f) => { },
 					new BeamerCfg()
 					{
 						Log = new BeamerLogCfg("rayA", targ.Log),
@@ -82,26 +82,18 @@ namespace brays.tests
 
 				using (var hw = new HeapHighway())
 				{
-					var ta = new Task(async () =>
+					if (rayB.LockOn(bep, aep) && rayA.LockOn(aep, bep) && await rayA.TargetIsActive())
 					{
-						rayA.LockOn(aep, bep);
-
 						var f = hw.Alloc(MEG);
 
 						for (int i = 0; i < MEG; i++)
 							f[i] = 43;
 
 						await rayA.Beam(f);
-					});
 
-					var tb = new Task(() =>
-					{
-						rayB.LockOn(bep, aep);
-					});
 
-					ta.Start();
-					tb.Start();
-					rst.WaitOne();
+						rst.WaitOne();
+					}
 				}
 
 				await Task.Yield();

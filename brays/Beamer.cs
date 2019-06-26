@@ -16,12 +16,21 @@ namespace brays
 {
 	public class Beamer : IDisposable
 	{
-		public Beamer(Action<MemoryFragment> onReceive, BeamerCfg cfg)
+		public Beamer(Action<MemoryFragment> onReceive, BeamerCfg cfg) : this(cfg)
 		{
-			if (onReceive == null || cfg == null) throw new ArgumentNullException();
+			this.onReceive = onReceive ?? throw new ArgumentNullException("onReceive");
+		}
+
+		public Beamer(Func<MemoryFragment, Task> onReceiveAsync, BeamerCfg cfg) : this(cfg)
+		{
+			this.onReceiveAsync = onReceiveAsync ?? throw new ArgumentNullException("onReceiveAsync");
+		}
+
+		Beamer(BeamerCfg cfg)
+		{
+			if (cfg == null) throw new ArgumentNullException("cfg");
 
 			ID = Guid.NewGuid();
-			this.onReceive = onReceive;
 			this.cfg = cfg;
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
@@ -59,6 +68,7 @@ namespace brays
 
 		public bool Probe(int awaitMS = 2000)
 		{
+			if (lockOnGate.IsAcquired) lockOnRst.Wait();
 			socket.Send(probeReqLead);
 			return probeReqAwait.WaitOne(awaitMS);
 		}
@@ -75,11 +85,12 @@ namespace brays
 				{
 					while (!tcs.Task.IsCompleted)
 					{
+						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 						socket.Send(probeReqLead);
 						await Task.Delay(cfg.ProbeFreqMS).ConfigureAwait(false);
 					}
 				}
-				catch (Exception ex) { }
+				catch { }
 			});
 
 			return tcs.Task;
@@ -698,11 +709,13 @@ namespace brays
 			}
 			catch (AggregateException aex)
 			{
-				trace("Ex", "ProcFrame", aex.Flatten().ToString());
+				if (cfg.Log.LogUnhandledCallbackExceptions)
+					trace("Ex", "ProcFrame", aex.Flatten().ToString());
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", ex.Message, ex.ToString());
+				if (cfg.Log.LogUnhandledCallbackExceptions)
+					trace("Ex", ex.Message, ex.ToString());
 			}
 			finally
 			{
@@ -723,6 +736,7 @@ namespace brays
 		{
 			try
 			{
+				if (lockOnGate.IsAcquired) lockOnRst.Wait();
 				socket.Send(probeLead);
 			}
 			catch { }
@@ -809,7 +823,7 @@ namespace brays
 
 			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) &&
 				ta.OnTileExchange != null) ta.OnTileExchange(xf);
-			else onReceive(xf);
+			else schedule(CallbackThread.SocketThread, xf);
 		}
 
 		void procPulse(MemoryFragment frag)
@@ -848,19 +862,7 @@ namespace brays
 					data.CopyTo(pfr);
 					pos += len + USH_LEN;
 
-					ThreadPool.QueueUserWorkItem((x) =>
-					{
-						try
-						{
-							onReceive(x);
-						}
-						catch (MemoryLaneException mlx)
-						{
-						}
-						catch (Exception ex)
-						{
-						}
-					}, pfr, true);
+					schedule(cfg.ScheduleCallbacksOn, pfr);
 				}
 			}
 			catch (Exception ex)
@@ -901,18 +903,11 @@ namespace brays
 
 			int fid = f.FrameID;
 
-			if (b.IsComplete && onReceive != null &&
-				Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
-				ThreadPool.QueueUserWorkItem((block) =>
-				{
-					try
-					{
-						if (logop) trace(TraceOps.ProcBlock, fid, $"B: {block.ID} completed.");
-						onReceive(block.Fragment);
-					}
-					catch { }
-				}, b, false);
-
+			if (b.IsComplete && Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
+			{
+				if (logop) trace(TraceOps.ProcBlock, fid, $"B: {b.ID} completed.");
+				schedule(cfg.ScheduleCallbacksOn, b.Fragment);
+			}
 		}
 
 		void procError(MemoryFragment frag)
@@ -1100,8 +1095,8 @@ namespace brays
 							else await Task.Delay(cfg.ErrorAwaitMS).ConfigureAwait(false);
 						}
 					}
-					catch (ObjectDisposedException) { }
-					catch (SocketException) { }
+					catch (ObjectDisposedException) { } // This is a very wrong way of canceling, MS! 
+					catch (SocketException) { }         // Don't care, don't want to log.
 					catch (Exception ex)
 					{
 						trace("Ex", "Receive", ex.ToString());
@@ -1222,6 +1217,52 @@ namespace brays
 			trace("AutoPulse", "Not pulsing");
 		}
 
+		void schedule(CallbackThread cbt, MemoryFragment f, bool disposeOnEx = true)
+		{
+			switch (cfg.ScheduleCallbacksOn)
+			{
+				case CallbackThread.ThreadPool:
+				{
+					ThreadPool.QueueUserWorkItem((frag) => run(frag, disposeOnEx), f, true);
+					break;
+				}
+				case CallbackThread.Task:
+				{
+					Task.Run(() => run(f, disposeOnEx));
+					break;
+				}
+				case CallbackThread.SocketThread:
+				{
+					run(f, disposeOnEx);
+					break;
+				}
+				default: throw new ArgumentException("ScheduleCallbacksOn");
+			}
+		}
+
+		void run(MemoryFragment f, bool disposeOnEx)
+		{
+			try
+			{
+				if (onReceive != null) onReceive(f);
+				else onReceiveAsync(f);
+			}
+			catch (AggregateException aex)
+			{
+				if (disposeOnEx) f?.Dispose();
+
+				if (cfg.Log.LogUnhandledCallbackExceptions)
+					trace("Ex", "Callback", aex.Flatten().ToString());
+			}
+			catch (Exception ex)
+			{
+				if (disposeOnEx) f?.Dispose();
+
+				if (cfg.Log.LogUnhandledCallbackExceptions)
+					trace("Ex", "Callback", ex.ToString());
+			}
+		}
+
 		void trace(TraceOps op, int frame, string title, string msg = null)
 		{
 			// [!!] DO NOT CHANGE THE FORMAT OFFSETS
@@ -1279,6 +1320,7 @@ namespace brays
 
 		CancellationTokenSource cancel;
 		Action<MemoryFragment> onReceive;
+		Func<MemoryFragment, Task> onReceiveAsync;
 		HeapHighway outHighway;
 		IMemoryHighway blockHighway;
 		IMemoryHighway tileXHigheay;
