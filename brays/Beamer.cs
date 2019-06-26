@@ -100,7 +100,7 @@ namespace brays
 					this.source = listen;
 					this.target = target;
 
-					if (socket != null ) socket.Dispose();
+					if (socket != null) socket.Dispose();
 
 					socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 					socket.Bind(this.source);
@@ -1196,7 +1196,7 @@ namespace brays
 			{
 				var logop = (TraceOps.AutoPulse & cfg.Log.Flags) == TraceOps.AutoPulse && cfg.Log.IsEnabled;
 
-				while (!IsStopped)
+				while (!IsStopped && cfg.EnablePulsing)
 				{
 					autoPulseRst.Reset();
 					autoPulseRst.Wait();
@@ -1218,6 +1218,8 @@ namespace brays
 			{
 				trace("Ex", "AutoPulse", ex.ToString());
 			}
+
+			trace("AutoPulse", "Not pulsing");
 		}
 
 		void trace(TraceOps op, int frame, string title, string msg = null)

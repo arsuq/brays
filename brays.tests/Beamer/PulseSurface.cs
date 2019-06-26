@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using TestSurface;
@@ -22,6 +20,12 @@ namespace brays.tests
 
 			await WithCheck(targ);
 			await NoCheck(targ);
+
+			if (!Passed.HasValue)
+			{
+				Passed = true;
+				IsComplete = true;
+			}
 		}
 
 		async Task WithCheck(TestArgs targ)
@@ -44,6 +48,7 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
+						EnablePulsing = true,
 						PulseSleepMS = 0,
 						Log = new BeamerLogCfg("rayA", targ.Log)
 					});
@@ -125,17 +130,14 @@ namespace brays.tests
 					ta.Start();
 					tb.Start();
 
-					if (await done.Wait() > 0)
+					if (await done.Wait() < 0)
 					{
-						Passed = true;
-						IsComplete = true;
+						Passed = false;
+						FailureMessage = "Timeout";
 					}
 				}
 
-				await Task.Yield();
-
-				Passed = true;
-				IsComplete = true;
+				if (!Passed.HasValue) "OK: WithCheck".AsSuccess();
 			}
 			catch (Exception ex)
 			{
@@ -165,7 +167,11 @@ namespace brays.tests
 				int totalSent = 0;
 				int totalReceived = 0;
 
-				rayA = new Beamer((f) => { }, new BeamerCfg() { Log = new BeamerLogCfg("rayA", targ.Log) });
+				rayA = new Beamer((f) => { }, new BeamerCfg()
+				{
+					EnablePulsing = true,
+					Log = new BeamerLogCfg("rayA", targ.Log)
+				});
 
 				rayB = new Beamer((f) =>
 				{
@@ -226,14 +232,13 @@ namespace brays.tests
 				ta.Start();
 				tb.Start();
 
-				if (await done.Wait() > 0)
+				if (await done.Wait() < 0)
 				{
-					Passed = true;
-					IsComplete = true;
+					Passed = false;
+					FailureMessage = "Timeout";
 				}
 
-				Passed = true;
-				IsComplete = true;
+				if (!Passed.HasValue) "OK: WithoutCheck".AsSuccess();
 			}
 			catch (Exception ex)
 			{

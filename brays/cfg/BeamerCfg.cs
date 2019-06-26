@@ -26,6 +26,13 @@ namespace brays
 		}
 
 		/// <summary>
+		/// Pulsing reserves one thread for arranging packets into dgrams.
+		/// This is useful when one needs to send large number of tiny messages
+		/// as they are zipped together into few tiles.
+		/// </summary>
+		public bool EnablePulsing;
+
+		/// <summary>
 		/// The max pulse delay.
 		/// </summary>
 		public int PulseSleepMS = 20;
