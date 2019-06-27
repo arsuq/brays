@@ -29,6 +29,12 @@ namespace brays
 		/// </summary>
 		public int CleanupFreqMS = 10000;
 
+		/// <summary>
+		/// If the request accepts replies, the XPU will serialize unhandled exceptions as payload. 
+		/// The received exchange will have an error code SerializedException.
+		/// </summary>
+		public bool PropagateExceptions = true;
+
 		internal readonly IMemoryHighway outHighway;
 		internal BeamerCfg bcfg;
 		internal XLogCfg log;

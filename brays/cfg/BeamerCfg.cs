@@ -35,7 +35,7 @@ namespace brays
 		/// <summary>
 		/// The max pulse delay.
 		/// </summary>
-		public int PulseSleepMS = 20;
+		public int PulseRetentionMS = 20;
 
 		/// <summary>
 		/// The await for the remote config when exchanging.

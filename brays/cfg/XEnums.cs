@@ -25,11 +25,14 @@ namespace brays
 		Disposed = 5
 	}
 
-	public enum XPUErrorCode : int
+	public enum XErrorCode : int
 	{
 		NotSet = 0,
+		General,
 		NotBeamed,
 		Timeout,
-		Deserialization
+		Deserialization,
+		ResourceNotFound,
+		SerializedException
 	}
 }

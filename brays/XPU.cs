@@ -5,10 +5,10 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace brays
 {
@@ -67,14 +67,12 @@ namespace brays
 
 			if (timeout != default && timeout != Timeout.InfiniteTimeSpan) Task.Delay(timeout).ContinueWith((_) =>
 			{
-				var tx = new Exchange((int)XPUErrorCode.Timeout);
+				var tx = new Exchange((int)XErrorCode.Timeout);
 				if (tc.TrySetResult(tx)) trace(tx);
 			});
 
-			if (!ox.NoReply)
+			if (!ox.DoNotReply)
 			{
-
-
 				refAwaits.TryAdd(ox.ID, new ExchangeAwait((ix) =>
 				{
 					if (tc.TrySetResult(ix)) trace(ix);
@@ -87,11 +85,11 @@ namespace brays
 				{
 					ox.Mark(XState.Beamed);
 					trace(ox);
-					if (ox.NoReply) tc.TrySetResult(ox);
+					if (ox.DoNotReply) tc.TrySetResult(ox);
 				}
 				else
 				{
-					var nb = new Exchange((int)XPUErrorCode.NotBeamed);
+					var nb = new Exchange((int)XErrorCode.NotBeamed);
 					if (tc.TrySetResult(nb)) trace(nb);
 				}
 			});
@@ -120,7 +118,7 @@ namespace brays
 			return Request(new Exchange(this, 0, (int)flags, 0, res, arg, cfg.outHighway), timeout);
 		}
 
-		public Task<Exchange> Reply<O>(Exchange x, O arg, bool doNotReply = false,
+		public Task<Exchange> Reply<O>(Exchange x, O arg, int errorCode = 0, bool doNotReply = false,
 			bool disposex = true, TimeSpan timeout = default)
 		{
 			if (disposex) x.Dispose();
@@ -128,7 +126,7 @@ namespace brays
 			XFlags flags = XFlags.IsReply;
 			if (doNotReply) flags = flags | XFlags.DoNotReply;
 
-			return Request(new Exchange<O>(this, x.ID, (int)flags, 0, string.Empty, arg, cfg.outHighway), timeout);
+			return Request(new Exchange<O>(this, x.ID, (int)flags, errorCode, string.Empty, arg, cfg.outHighway), timeout);
 		}
 
 		public Task<Exchange> RawReply(Exchange x, Span<byte> arg, bool doNotReply = false,
@@ -140,6 +138,15 @@ namespace brays
 			if (doNotReply) flags = flags | XFlags.DoNotReply;
 
 			return Request(new Exchange(this, x.ID, (int)flags, 0, string.Empty, arg, cfg.outHighway), timeout);
+		}
+
+		public Task<Exchange> RawReply(Exchange x, int errorCode, bool disposex = true, TimeSpan timeout = default)
+		{
+			if (disposex) x.Dispose();
+
+			var flags = XFlags.IsReply | XFlags.NoSerialization | XFlags.DoNotReply;
+
+			return Request(new Exchange(this, x.ID, (int)flags, errorCode, string.Empty, default, cfg.outHighway), timeout);
 		}
 
 		public bool RegisterAPI(string key, Action<Exchange> f) => resAPIs.TryAdd(key, new ResFunction(f));
@@ -162,50 +169,52 @@ namespace brays
 
 		void onReceive(MemoryFragment f)
 		{
-			// [!] The disposing is left to the handlers,
+			// [1] The disposing is left to the handlers,
 			// so that async work wouldn't require a fragment copy.
+
+			// [2] The thread this method will execute on is determined by
+			// the beamer's config ScheduleCallbacksOn value.
+
+			// [3] Unhandled exceptions, aggregated or not, will be caught 
+			// by the beamer's scheduler and the fragment will be disposed. 
+
+			var x = new Exchange(this, f);
+
+			if (!x.IsValid) return;
 
 			try
 			{
-				var x = new Exchange(this, f);
-
-				if (!x.IsValid) return;
-
 				trace(x);
 
-				if (x.RefID > 0)
+				if (x.IsReply)
 				{
-					// [i] The refAwaits should be handled only once.
+					// [i] The refAwaits are handled once.
 
 					if (refAwaits.TryRemove(x.RefID, out ExchangeAwait xa))
 					{
 						x.Mark(XState.Processing);
 						xa.OnReferred(x);
 					}
-					else
-					{
-						trace(x, "Disposing, no refAwait was found.");
-						x.Dispose();
-					}
+					else x.Dispose();
 				}
 				else if (resAPIs.TryGetValue(x.ResID, out ResFunction rf))
 				{
 					x.Mark(XState.Processing);
 
-
 					if (rf.Func != null) rf.Func(x);
 					else rf.Action(x);
 				}
-			}
-			catch (AggregateException aex)
-			{
-				trace("Ex", "OnReceive", aex.Flatten().ToString());
-				f.Dispose();
+				else if (!x.DoNotReply) x.RawReply((int)XErrorCode.ResourceNotFound);
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", "OnReceive", ex.ToString());
-				f.Dispose();
+				if (!x.DoNotReply)
+				{
+					if (cfg.PropagateExceptions) x.Reply(ex, (int)XErrorCode.SerializedException);
+					else x.RawReply((int)XErrorCode.General);
+				}
+
+				throw;
 			}
 		}
 

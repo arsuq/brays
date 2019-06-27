@@ -215,9 +215,22 @@ namespace brays
 		public void TileXFF(Span<byte> data, Action<MemoryFragment> onTileXAwait) => 
 			tilexOnce((byte)Lead.Tile, data, 0, 0, onTileXAwait);
 
+		/// <summary>
+		/// Compacts multiple small packets into datagrams of TileSizeBytes size. 
+		/// The bits are sent after either the PulseRetentionMS interval expires or enough
+		/// bytes are zipped. 
+		/// </summary>
+		/// <param name="data">The bytes.</param>
+		/// <returns>A reset event to wait for a status (SignalKind.ACK).
+		/// Note that the resetEvent is shared and will be reset for the next pulse.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public ResetEvent Pulse(Span<byte> data) => pack(data);
 
+		/// <summary>
+		/// Sends the fragment to the target beamer in TotalReBeamsCount retries, awaiting BeamAwaitMS on failure.
+		/// </summary>
+		/// <param name="f">The data to transfer.</param>
+		/// <returns></returns>
 		public async Task<bool> Beam(MemoryFragment f)
 		{
 			try
@@ -1243,7 +1256,7 @@ namespace brays
 				{
 					autoPulseRst.Reset();
 					autoPulseRst.Wait();
-					await Task.Delay(cfg.PulseSleepMS);
+					await Task.Delay(cfg.PulseRetentionMS);
 
 					if (Monitor.TryEnter(packLock, 0))
 						try

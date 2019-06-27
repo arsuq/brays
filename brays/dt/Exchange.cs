@@ -72,11 +72,12 @@ namespace brays
 			pos = Fragment.Write(Created, pos);
 			pos = Fragment.Write(errorCode, pos);
 			pos = Fragment.Write(ResIDLen, pos);
-			pos = Fragment.Write(resBytes, pos);
+
+			if (resBytes.Length > 0) pos = Fragment.Write(resBytes, pos);
 
 			DataOffset = pos;
 
-			Fragment.Write(data, pos);
+			if (data.Length > 0) Fragment.Write(data, pos);
 		}
 
 		internal Exchange(int errorCode)
@@ -127,12 +128,12 @@ namespace brays
 		public readonly bool IsValid;
 		public Span<byte> Data => Fragment.Span().Slice(DataOffset);
 		public readonly MemoryFragment Fragment;
-		public XPUErrorCode KnownError => (XPUErrorCode)ErrorCode;
+		public XErrorCode KnownError => (XErrorCode)ErrorCode;
 		public XFlags ExchangeFlags => (XFlags)Flags;
 		public XState State => (XState)state;
 		public bool RawBits => (ExchangeFlags & XFlags.NoSerialization) == XFlags.NoSerialization;
-		public bool NoReply => (ExchangeFlags & XFlags.DoNotReply) == XFlags.DoNotReply;
-
+		public bool IsReply => (ExchangeFlags & XFlags.IsReply) == XFlags.IsReply;
+		public bool DoNotReply => (ExchangeFlags & XFlags.DoNotReply) == XFlags.DoNotReply;
 		public bool IsOK => ErrorCode == 0;
 
 		public readonly int ID;
@@ -159,7 +160,7 @@ namespace brays
 		{
 			var x = new Exchange(xpu, f, isCopy);
 
-			if (!x.TryDeserialize(out Arg)) Instance = new Exchange((int)XPUErrorCode.Deserialization);
+			if (!x.TryDeserialize(out Arg)) Instance = new Exchange((int)XErrorCode.Deserialization);
 			else Instance = x;
 		}
 
@@ -186,7 +187,7 @@ namespace brays
 				BitConverter.TryWriteBytes(header.Slice(24), errorCode);
 				BitConverter.TryWriteBytes(header.Slice(28), resLen);
 
-				resBytes.CopyTo(header.Slice(Exchange.HEADER_LEN));
+				if (resBytes.Length > 0) resBytes.CopyTo(header.Slice(Exchange.HEADER_LEN));
 				ms.Write(header);
 			});
 

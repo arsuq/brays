@@ -49,7 +49,7 @@ namespace brays.tests
 				int data = 0;
 				x.Fragment.Read(ref data, x.DataOffset);
 
-				while (data > 0 && !x.NoReply)
+				while (data > 0 && !x.DoNotReply)
 				{
 					data--;
 					ms.Write(data, 0);
@@ -99,7 +99,7 @@ namespace brays.tests
 			{
 				x.Fragment.Read(ref data, x.DataOffset);
 
-				while (data > 0 && !x.NoReply)
+				while (data > 0 && !x.DoNotReply)
 				{
 					data--;
 

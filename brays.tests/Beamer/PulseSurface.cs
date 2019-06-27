@@ -49,7 +49,7 @@ namespace brays.tests
 					new BeamerCfg()
 					{
 						EnablePulsing = true,
-						PulseSleepMS = 0,
+						PulseRetentionMS = 0,
 						Log = new BeamerLogCfg("rayA", targ.Log)
 					});
 
