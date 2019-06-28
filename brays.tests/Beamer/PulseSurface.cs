@@ -9,12 +9,13 @@ namespace brays.tests
 	class PulseSurface : ITestSurface
 	{
 		public string Info => "Test the Beamer small data packing into dgrams.";
+		public string Tags => "beamer, pulse";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 			var targ = new TestArgs(args);
 

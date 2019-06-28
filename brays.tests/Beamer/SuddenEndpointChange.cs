@@ -10,12 +10,13 @@ namespace brays.tests
 	class SuddenEndpointChange : ITestSurface
 	{
 		public string Info => "Tests abrupt endpoint update.";
+		public string Tags => "xpu, ex";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 #if !DEBUG
 			return;

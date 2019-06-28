@@ -11,12 +11,13 @@ namespace brays.tests
 	class ResetEventSurface : ITestSurface
 	{
 		public string Info => "Test the ResetEvent class.";
+		public string Tags => "beamer, frm";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => true;
 
-		public Task Run(IDictionary<string, List<string>> args)
+		public Task Start(IDictionary<string, List<string>> args)
 		{
 			autoReset();
 			noReset();

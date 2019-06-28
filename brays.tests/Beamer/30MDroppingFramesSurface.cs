@@ -11,12 +11,13 @@ namespace brays.tests
 	class DroppingFrames30MSurface : ITestSurface
 	{
 		public string Info => "Tests beaming 30M with frame drops.";
+		public string Tags => "beamer, drops";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 #if !DEBUG
 			return;

@@ -8,12 +8,13 @@ namespace brays.tests
 	class BitMaskSurface : ITestSurface
 	{
 		public string Info => "Tests BitMask class.";
+		public string Tags => "beamer, frm";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => true;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public Task Start(IDictionary<string, List<string>> args)
 		{
 			try
 			{
@@ -43,6 +44,8 @@ namespace brays.tests
 				Passed = false;
 				FailureMessage = ex.Message;
 			}
+
+			return Task.CompletedTask;
 		}
 	}
 }

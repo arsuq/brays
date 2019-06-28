@@ -7,7 +7,7 @@ namespace brays.tests
 	{
 		static void Main(string[] args)
 		{
-			new Runner().Run(args);
+			new SurfaceLauncher().Start(args);
 
 			Console.ReadLine();
 		}

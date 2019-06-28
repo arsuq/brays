@@ -10,12 +10,13 @@ namespace brays.tests
 	class ProbeReqSurf : ITestSurface
 	{
 		public string Info => "Tests the Beamer probing.";
+		public string Tags => "beamer";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 			Beamer a = null;
 			Beamer b = null;

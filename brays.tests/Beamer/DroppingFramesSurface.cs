@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using TestSurface;
@@ -10,12 +9,13 @@ namespace brays.tests
 	class DroppingFramesSurface : ITestSurface
 	{
 		public string Info => "Tests beaming with frame drops.";
+		public string Tags => "beamer, drops";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 #if !DEBUG
 			return;

@@ -10,12 +10,13 @@ namespace brays.tests
 	public class ConSocketSurface : ITestSurface
 	{
 		public string Info => "";
+		public string Tags => "";
 		public string FailureMessage { get; set; }
 		public bool? Passed { get; set; }
 		public bool IsComplete { get; set; }
 		public bool IndependentLaunchOnly => true;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 			var a = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 			var b = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);

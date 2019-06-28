@@ -8,7 +8,8 @@ namespace brays.tests
 {
 	class Replies : ITestSurface
 	{
-		public string Info => "Smoke tests reply sequencing with RawRequest-RawReply.";
+		public string Info => "Tests reply sequencing with RawRequest-RawReply.";
+		public string Tags => "xpu";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
@@ -16,7 +17,7 @@ namespace brays.tests
 
 		readonly TimeSpan TIMEOUT = TimeSpan.FromMilliseconds(1000);
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 			var ta = new TestArgs(args);
 			var s = ta.AE;

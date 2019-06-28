@@ -10,12 +10,13 @@ namespace brays.tests
 	class SimpleExchange : ITestSurface
 	{
 		public string Info => "Tests the basic request reply.";
+		public string Tags => "xpu";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
 
-		public async Task Run(IDictionary<string, List<string>> args)
+		public async Task Start(IDictionary<string, List<string>> args)
 		{
 			await Task.Yield();
 
