@@ -10,7 +10,7 @@ namespace brays.tests
 {
 	class DroppedTiles : ITestSurface
 	{
-		public string Info => "Tests request-reply of bigger than a tile args with dropping frames Beamer.";
+		public string Info => "Tests request-reply of bigger than a tile argument while dropping frames.";
 		public string Tags => "xpu, drops";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }

@@ -47,23 +47,26 @@ namespace brays
 	}
 
 	[Flags]
-	public enum TraceOps : int
+	public enum LogFlags : int
 	{
 		None = 0,
-		Tile = 1,
-		AutoPulse = 1 << 2,
-		ReqTiles = 1 << 3,
-		Beam = 1 << 4,
-		Status = 1 << 5,
-		Signal = 1 << 6,
-		ProcBlock = 1 << 7,
-		ProcError = 1 << 8,
-		ProcStatus = 1 << 9,
-		ProcSignal = 1 << 10,
-		ProcTile = 1 << 11,
-		ProcPulse = 1 << 12
+		Exception = 1,
+		Cleanup = 1 << 2,
+		LockOn = 1 << 3,
+		Tile = 1 << 4,
+		AutoPulse = 1 << 5,
+		ReqTiles = 1 << 6,
+		Beam = 1 << 7,
+		Status = 1 << 8,
+		Signal = 1 << 9,
+		ProcBlock = 1 << 10,
+		ProcError = 1 << 11,
+		ProcStatus = 1 << 12,
+		ProcSignal = 1 << 13,
+		ProcTile = 1 << 14,
+		ProcPulse = 1 << 15
 #if DEBUG
-		, DropFrame = 1 << 13,
+		, DropFrame = 1 << 16,
 #endif
 	}
 }

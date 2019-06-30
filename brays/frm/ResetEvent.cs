@@ -46,7 +46,6 @@ namespace brays
 		/// </summary>
 		/// <param name="timeout">The timespan before Set(-1).</param>
 		/// <returns>The Set() value or -1 if timeouts.</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public Task<int> Wait(TimeSpan timeout, bool autoreset = true)
 		{
 			// [!] Must use the same tcs instance for waiting and in the Timeout callback.

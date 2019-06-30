@@ -9,21 +9,19 @@ namespace brays.tests
 {
 	class SuddenEndpointChange : ITestSurface
 	{
-		public string Info => "Tests abrupt endpoint update.";
-		public string Tags => "xpu, ex";
+		public string Info => $"Tests abrupt port change on the source while dropping {DROPPED_FRAMES_PERCENT} percent of the tiles";
+		public string Tags => "xpu, ex, drops, cfg, endpoint";
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
 		public bool IndependentLaunchOnly => false;
+		const int DROPPED_FRAMES_PERCENT = 20;
 
 		public async Task Start(IDictionary<string, List<string>> args)
 		{
 #if !DEBUG
 			return;
 #endif
-			const int DROPPED_FRAMES_PERCENT = 20;
-
-			$"Will test abrupt port change on the source while dropping {DROPPED_FRAMES_PERCENT} percent of the tiles ".AsHelp();
 
 			Beamer rayA = null;
 			Beamer rayB = null;
@@ -57,7 +55,7 @@ namespace brays.tests
 								Passed = false;
 								FailureMessage = "Hash difference";
 							}
-							else "Hash match".AsSuccess();
+							else "The MD5 hashes of the sent and received bits match.".AsSuccess();
 
 							rst.Set();
 						}
@@ -91,10 +89,11 @@ namespace brays.tests
 					{
 						await rayA.LockOn(aep, bep, -1);
 
-						Task.Delay(50).ContinueWith((t) =>
+						Task.Delay(80).ContinueWith((t) =>
 						{
 							try
 							{
+								"Changing the source endpoint...".AsInfo();
 								rayA.Source.Port = 9999;
 								if (!rayA.ConfigPush().Result)
 								{
@@ -104,8 +103,14 @@ namespace brays.tests
 								}
 								else
 								{
-									rayA.LockOn(rayA.Source, rayA.Target);
-									$"The source port has changed and the beamer locked on {rayA.Source.ToString()}".AsWarn();
+									if (rayA.LockOn(rayA.Source, rayA.Target))
+										$"The beamer locked on {rayA.Source.ToString()}".AsInfo();
+									else
+									{
+										$"The beamer failed to lock on {rayA.Source.ToString()}".AsError();
+										Passed = false;
+										rst.Set();
+									}
 								}
 							}
 							catch (Exception ex)

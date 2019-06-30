@@ -40,7 +40,7 @@ namespace brays
 		/// <summary>
 		/// The await for the remote config when exchanging.
 		/// </summary>
-		public TimeSpan ConfigExchangeTimeout = new TimeSpan(0, 0, 30);
+		public TimeSpan ConfigExchangeTimeout = new TimeSpan(0, 0, 40);
 
 		/// <summary>
 		/// The default value is ushort.MaxValue * 400

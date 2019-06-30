@@ -162,14 +162,14 @@ namespace brays
 
 					Volatile.Write(ref isLocked, true);
 
-					trace("Lock-on", $"{source.ToString()} target: {target.ToString()}");
+					trace(LogFlags.LockOn, 0, $"{source.ToString()} target: {target.ToString()}");
 
 					r = true;
 				}
 				catch (Exception ex)
 				{
 					if (!lockOnRst.IsSet) lockOnRst.Set();
-					trace("Ex", "LockOn", ex.ToString());
+					trace(LogFlags.Exception, 0, ex.Message, ex.ToString());
 					throw;
 				}
 				finally
@@ -212,7 +212,7 @@ namespace brays
 		/// <param name="data">The bits.</param>
 		/// <param name="onTileXAwait">If the tile reaches the target it may reply.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void TileXFF(Span<byte> data, Action<MemoryFragment> onTileXAwait) => 
+		public void TileXFF(Span<byte> data, Action<MemoryFragment> onTileXAwait) =>
 			tilexOnce((byte)Lead.Tile, data, 0, 0, onTileXAwait);
 
 		/// <summary>
@@ -249,11 +249,11 @@ namespace brays
 			}
 			catch (AggregateException aex)
 			{
-				trace("Ex", "Beam", aex.Flatten().ToString());
+				trace(LogFlags.Exception, 0, "Beam", aex.Flatten().ToString());
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", "Beam", ex.ToString());
+				trace(LogFlags.Exception, 0, "Beam", ex.ToString());
 			}
 
 			return false;
@@ -337,16 +337,16 @@ namespace brays
 							}
 						}
 
-						var logop = ((TraceOps.Beam & cfg.Log.Flags) == TraceOps.Beam && cfg.Log.IsEnabled);
+						var logop = ((LogFlags.Beam & cfg.Log.Flags) == LogFlags.Beam && cfg.Log.IsEnabled);
 
 						if (sentBytes == dgramLen)
 						{
-							if (logop) trace(TraceOps.Beam, fid, $"{sentBytes} B: {b.ID} T: {i}");
+							if (logop) trace(LogFlags.Beam, fid, $"{sentBytes} B: {b.ID} T: {i}");
 							sent++;
 						}
 						else
 						{
-							if (logop) trace(TraceOps.Beam, fid, $"Faulted for sending {sentBytes} of {dgramLen} byte dgram.");
+							if (logop) trace(LogFlags.Beam, fid, $"Faulted for sending {sentBytes} of {dgramLen} byte dgram.");
 
 							b.isFaulted = true;
 							return 0;
@@ -354,7 +354,7 @@ namespace brays
 					}
 					catch (Exception ex)
 					{
-						trace("Ex", ex.Message, ex.StackTrace);
+						trace(LogFlags.Exception, 0, ex.Message, ex.StackTrace);
 					}
 					finally
 					{
@@ -372,8 +372,6 @@ namespace brays
 
 		async Task<bool> beamLoop(Block b)
 		{
-			await Task.Yield();
-
 			try
 			{
 				for (int i = 0; i < cfg.TotalReBeamsCount; i++)
@@ -392,12 +390,11 @@ namespace brays
 			}
 			catch (AggregateException aex)
 			{
-				var faex = aex.Flatten();
-				trace("Ex", faex.Message, faex.StackTrace);
+				trace(LogFlags.Exception, 0, "BeamLoop", aex.Flatten().ToString());
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", ex.Message, ex.StackTrace);
+				trace(LogFlags.Exception, 0, "BeamLoop", ex.ToString());
 			}
 
 			return false;
@@ -421,7 +418,7 @@ namespace brays
 
 				var fid = Interlocked.Increment(ref frameCounter);
 				var len = (tileMap != null ? tileMap.Length : 0) + STATUS.HEADER;
-				var logop = ((TraceOps.Status & cfg.Log.Flags) == TraceOps.Status && cfg.Log.IsEnabled);
+				var logop = ((LogFlags.Status & cfg.Log.Flags) == LogFlags.Status && cfg.Log.IsEnabled);
 				ResetEvent rst = null;
 				var rsp = 0;
 
@@ -436,7 +433,7 @@ namespace brays
 					var ackq = !awaitRsp || signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 					{
 						Volatile.Write(ref rsp, mark);
-						if (logop) trace(TraceOps.Status, fid, $"{mark} B: {blockID}");
+						if (logop) trace(LogFlags.Status, fid, $"{mark} B: {blockID}");
 						rst.Set(true);
 					}));
 
@@ -455,8 +452,8 @@ namespace brays
 							var sent = socket.Send(frag, SocketFlags.None);
 
 							if (logop)
-								if (sent == 0) trace(TraceOps.Status, fid, $"Socket sent 0 bytes. B: {blockID} #{i + 1}");
-								else trace(TraceOps.Status, fid, $"B: {blockID} {map} #{i + 1}");
+								if (sent == 0) trace(LogFlags.Status, fid, $"Socket sent 0 bytes. B: {blockID} #{i + 1}");
+								else trace(LogFlags.Status, fid, $"B: {blockID} {map} #{i + 1}");
 
 							if (!awaitRsp || await rst.Wait(awaitMS) > 0) break;
 							awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
@@ -468,7 +465,7 @@ namespace brays
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", "Status", ex.ToString());
+				trace(LogFlags.Exception, 0, "Status", ex.ToString());
 			}
 
 			return 0;
@@ -482,14 +479,14 @@ namespace brays
 
 			signal.Write(s);
 			var sent = socket.Send(s);
-			var logop = ((TraceOps.Signal & cfg.Log.Flags) == TraceOps.Signal && cfg.Log.IsEnabled);
+			var logop = ((LogFlags.Signal & cfg.Log.Flags) == LogFlags.Signal && cfg.Log.IsEnabled);
 
 			if (sent > 0)
 			{
 				if (keep) sentSignalsFor.TryAdd(refID, new SignalResponse(signal.Mark, isError));
-				if (logop) trace(TraceOps.Signal, fid, $"M: {mark} R: {refID}");
+				if (logop) trace(LogFlags.Signal, fid, $"M: {mark} R: {refID}");
 			}
-			else if (logop) trace(TraceOps.Signal, fid, $"Failed to send M: {mark} R: {refID}");
+			else if (logop) trace(LogFlags.Signal, fid, $"Failed to send M: {mark} R: {refID}");
 
 			return sent;
 		}
@@ -518,7 +515,7 @@ namespace brays
 
 			if (fid == 0) fid = Interlocked.Increment(ref frameCounter);
 			var len = dataLen + TILEX.HEADER;
-			var logop = ((TraceOps.Tile & cfg.Log.Flags) == TraceOps.Tile && cfg.Log.IsEnabled);
+			var logop = ((LogFlags.Tile & cfg.Log.Flags) == LogFlags.Tile && cfg.Log.IsEnabled);
 			var rsp = 0;
 
 			if (onTileXAwait != null) tileXAwaits.TryAdd(fid, new TileXAwait(onTileXAwait));
@@ -547,8 +544,8 @@ namespace brays
 						var sent = socket.Send(frag, SocketFlags.None);
 
 						if (logop)
-							if (sent == frag.Length) trace(TraceOps.Tile, fid, $"K: {(Lead)kind} b:{sent} #{i + 1}");
-							else trace(TraceOps.Tile, fid, $"Failed K: {(Lead)kind}");
+							if (sent == frag.Length) trace(LogFlags.Tile, fid, $"K: {(Lead)kind} b:{sent} #{i + 1}");
+							else trace(LogFlags.Tile, fid, $"Failed K: {(Lead)kind}");
 
 						if (await rst.Wait(awaitMS) > 0) break;
 						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
@@ -567,7 +564,7 @@ namespace brays
 
 			if (fid == 0) fid = Interlocked.Increment(ref frameCounter);
 			var len = data.Length + TILEX.HEADER;
-			var logop = ((TraceOps.Tile & cfg.Log.Flags) == TraceOps.Tile && cfg.Log.IsEnabled);
+			var logop = ((LogFlags.Tile & cfg.Log.Flags) == LogFlags.Tile && cfg.Log.IsEnabled);
 
 			if (onTileXAwait != null) tileXAwaits.TryAdd(fid, new TileXAwait(onTileXAwait));
 
@@ -581,8 +578,8 @@ namespace brays
 				var sent = socket.Send(frag, SocketFlags.None);
 
 				if (logop)
-					if (sent == frag.Length) trace(TraceOps.Tile, fid, $"TileXOnce K: {kind}");
-					else trace(TraceOps.Tile, fid, $"TileXOnce Failed:  Sent {sent} of {frag.Length} bytes");
+					if (sent == frag.Length) trace(LogFlags.Tile, fid, $"TileXOnce K: {kind}");
+					else trace(LogFlags.Tile, fid, $"TileXOnce Failed:  Sent {sent} of {frag.Length} bytes");
 			}
 		}
 
@@ -631,7 +628,7 @@ namespace brays
 					}
 					catch (AggregateException aex)
 					{
-						trace("Ex", "Pulse-TileX", aex.Flatten().ToString());
+						trace(LogFlags.Exception, 0, "Pulse-TileX", aex.Flatten().ToString());
 					}
 					finally
 					{
@@ -694,7 +691,6 @@ namespace brays
 
 				var fid = Interlocked.Increment(ref frameCounter);
 
-
 				if (!isRequest) return await tilex((byte)Lead.Cfg, sf, null, 0, 0, reqID, fid)
 						.ConfigureAwait(false) == (int)SignalKind.ACK;
 				else
@@ -710,7 +706,7 @@ namespace brays
 			}
 			catch (AggregateException aex)
 			{
-				trace("Ex", "ConfigExchange", aex.Flatten().ToString());
+				trace(LogFlags.Exception, 0, "ConfigExchange", aex.Flatten().ToString());
 
 				return false;
 			}
@@ -720,7 +716,7 @@ namespace brays
 			}
 		}
 
-		bool isClone(TraceOps op, int frameID, bool signalWithLastReply = true)
+		bool isClone(LogFlags op, int frameID, bool signalWithLastReply = true)
 		{
 			if (!procFrames.TryAdd(frameID, DateTime.Now))
 			{
@@ -770,12 +766,12 @@ namespace brays
 			catch (AggregateException aex)
 			{
 				if (cfg.Log.LogUnhandledCallbackExceptions)
-					trace("Ex", "ProcFrame", aex.Flatten().ToString());
+					trace(LogFlags.Exception, 0, "ProcFrame", aex.Flatten().ToString());
 			}
 			catch (Exception ex)
 			{
 				if (cfg.Log.LogUnhandledCallbackExceptions)
-					trace("Ex", ex.Message, ex.ToString());
+					trace(LogFlags.Exception, 0, ex.Message, ex.ToString());
 			}
 			finally
 			{
@@ -809,16 +805,16 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, f.FrameID, $"Cfg R: {f.RefID}");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, f.FrameID, $"Cfg R: {f.RefID}");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.ProcTile, f.FrameID)) return;
+			if (isClone(LogFlags.ProcTile, f.FrameID)) return;
 			signal(f.FrameID, (int)SignalKind.ACK);
 
-			if (((TraceOps.ProcTile & cfg.Log.Flags) == TraceOps.ProcTile && cfg.Log.IsEnabled))
-				trace(TraceOps.ProcTile, f.FrameID, "K: CfgReq");
+			if (((LogFlags.ProcTile & cfg.Log.Flags) == LogFlags.ProcTile && cfg.Log.IsEnabled))
+				trace(LogFlags.ProcTile, f.FrameID, "K: CfgReq");
 
 			configExchange(f.FrameID, false).Wait();
 		}
@@ -829,12 +825,12 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, f.FrameID, $"Cfg R: {f.RefID}");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, f.FrameID, $"Cfg R: {f.RefID}");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.ProcTile, f.FrameID)) return;
+			if (isClone(LogFlags.ProcTile, f.FrameID)) return;
 			signal(f.FrameID, (int)SignalKind.ACK);
 
 			var tcfg = new CfgX(f.Data);
@@ -843,8 +839,8 @@ namespace brays
 			if (tileXAwaits.TryGetValue(f.RefID, out TileXAwait ta) && ta.OnTileExchange != null)
 				ta.OnTileExchange(null);
 
-			if (((TraceOps.ProcTile & cfg.Log.Flags) == TraceOps.ProcTile && cfg.Log.IsEnabled))
-				trace(TraceOps.ProcTile, f.FrameID, $"K: Cfg " +
+			if (((LogFlags.ProcTile & cfg.Log.Flags) == LogFlags.ProcTile && cfg.Log.IsEnabled))
+				trace(LogFlags.ProcTile, f.FrameID, $"K: Cfg " +
 				$"MaxBeams: {tcfg.MaxBeamedTilesAtOnce} MaxRcvs: {tcfg.MaxConcurrentReceives} " +
 				$"SBuff: {tcfg.SendBufferSize} RBuff: {tcfg.ReceiveBufferSize}");
 
@@ -857,17 +853,17 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, f.FrameID, $"Tile R: {f.RefID}");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, f.FrameID, $"Tile R: {f.RefID}");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.ProcTile, f.FrameID)) return;
+			if (isClone(LogFlags.ProcTile, f.FrameID)) return;
 
 			signal(f.FrameID, (int)SignalKind.ACK);
 
-			if (((TraceOps.ProcTile & cfg.Log.Flags) == TraceOps.ProcTile && cfg.Log.IsEnabled))
-				trace(TraceOps.ProcTile, f.FrameID, $"K: {(Lead)f.Kind}");
+			if (((LogFlags.ProcTile & cfg.Log.Flags) == LogFlags.ProcTile && cfg.Log.IsEnabled))
+				trace(LogFlags.ProcTile, f.FrameID, $"K: {(Lead)f.Kind}");
 
 			MemoryFragment xf = null;
 
@@ -894,17 +890,17 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, f.FrameID, "ProcPulse");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, f.FrameID, "ProcPulse");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.ProcPulse, f.FrameID)) return;
+			if (isClone(LogFlags.ProcPulse, f.FrameID)) return;
 
 			signal(f.FrameID, (int)SignalKind.ACK);
 
-			if (((TraceOps.ProcPulse & cfg.Log.Flags) == TraceOps.ProcPulse && cfg.Log.IsEnabled))
-				trace(TraceOps.ProcPulse, f.FrameID, $"Len: {f.Data.Length}");
+			if (((LogFlags.ProcPulse & cfg.Log.Flags) == LogFlags.ProcPulse && cfg.Log.IsEnabled))
+				trace(LogFlags.ProcPulse, f.FrameID, $"Len: {f.Data.Length}");
 
 			try
 			{
@@ -928,7 +924,7 @@ namespace brays
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", "ProcPack", ex.ToString());
+				trace(LogFlags.Exception, 0, "ProcPack", ex.ToString());
 			}
 		}
 
@@ -938,12 +934,12 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, f.FrameID, $"ProcBlock B: {f.BlockID} T: {f.TileIndex}");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, f.FrameID, $"ProcBlock B: {f.BlockID} T: {f.TileIndex}");
 				return;
 			}
 #endif
-			if (isClone(TraceOps.ProcBlock, f.FrameID)) return;
+			if (isClone(LogFlags.ProcBlock, f.FrameID)) return;
 			if (!blocks.ContainsKey(f.BlockID))
 			{
 				// Reject logic + Error or:
@@ -952,21 +948,21 @@ namespace brays
 			}
 
 			var b = blocks[f.BlockID];
-			var logop = ((TraceOps.ProcBlock & cfg.Log.Flags) == TraceOps.ProcBlock && cfg.Log.IsEnabled);
+			var logop = ((LogFlags.ProcBlock & cfg.Log.Flags) == LogFlags.ProcBlock && cfg.Log.IsEnabled);
 
 			if (!b.Receive(f))
 			{
-				if (logop) trace(TraceOps.ProcBlock, f.FrameID, $"Tile ignore B: {b.ID} T: {f.TileIndex}");
+				if (logop) trace(LogFlags.ProcBlock, f.FrameID, $"Tile ignore B: {b.ID} T: {f.TileIndex}");
 				return;
 			}
 
-			if (logop) trace(TraceOps.ProcBlock, f.FrameID, $"{f.Length} B: {f.BlockID} T: {f.TileIndex}");
+			if (logop) trace(LogFlags.ProcBlock, f.FrameID, $"{f.Length} B: {f.BlockID} T: {f.TileIndex}");
 
 			int fid = f.FrameID;
 
 			if (b.IsComplete && Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
 			{
-				if (logop) trace(TraceOps.ProcBlock, fid, $"B: {b.ID} completed.");
+				if (logop) trace(LogFlags.ProcBlock, fid, $"B: {b.ID} completed.");
 				schedule(cfg.ScheduleCallbacksOn, b.Fragment);
 			}
 		}
@@ -977,14 +973,14 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, sg.FrameID, $"ProcError");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, sg.FrameID, $"ProcError");
 				return;
 			}
 #endif
-			var logop = ((TraceOps.ProcError & cfg.Log.Flags) == TraceOps.ProcError && cfg.Log.IsEnabled);
+			var logop = ((LogFlags.ProcError & cfg.Log.Flags) == LogFlags.ProcError && cfg.Log.IsEnabled);
 
-			if (!isClone(TraceOps.ProcError, sg.FrameID))
+			if (!isClone(LogFlags.ProcError, sg.FrameID))
 			{
 				var err = (ErrorCode)sg.Mark;
 
@@ -995,14 +991,14 @@ namespace brays
 						if (blocks.TryGetValue(sg.RefID, out Block b))
 						{
 							Volatile.Write(ref b.isRejected, true);
-							if (logop) trace(TraceOps.ProcError, sg.FrameID, $"Rejected B: [{sg.RefID}.");
+							if (logop) trace(LogFlags.ProcError, sg.FrameID, $"Rejected B: [{sg.RefID}.");
 						}
 
 						break;
 					}
 					case ErrorCode.Unknown:
 					default:
-					if (logop) trace(TraceOps.ProcError, sg.FrameID, $"Unknown code M: {sg.Mark} R: [{sg.RefID}.");
+					if (logop) trace(LogFlags.ProcError, sg.FrameID, $"Unknown code M: {sg.Mark} R: [{sg.RefID}.");
 					break;
 				}
 			}
@@ -1014,15 +1010,15 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, st.FrameID, $"ProcStatus B: {st.BlockID}");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, st.FrameID, $"ProcStatus B: {st.BlockID}");
 				return;
 			}
 #endif
 
-			if (!isClone(TraceOps.ProcStatus, st.FrameID))
+			if (!isClone(LogFlags.ProcStatus, st.FrameID))
 			{
-				var logop = ((TraceOps.ProcStatus & cfg.Log.Flags) == TraceOps.ProcStatus && cfg.Log.IsEnabled);
+				var logop = ((LogFlags.ProcStatus & cfg.Log.Flags) == LogFlags.ProcStatus && cfg.Log.IsEnabled);
 
 				if (blocks.TryGetValue(st.BlockID, out Block b))
 				{
@@ -1031,7 +1027,7 @@ namespace brays
 
 					if (b.IsIncoming)
 					{
-						if (logop) trace(TraceOps.ProcStatus, st.FrameID, $"All-sent for B: {st.BlockID}");
+						if (logop) trace(LogFlags.ProcStatus, st.FrameID, $"All-sent for B: {st.BlockID}");
 
 						// This signal is received after the other side has sent all tiles.
 						// Sends a re-beam request if no tile is received for x ms.
@@ -1044,13 +1040,13 @@ namespace brays
 
 						if (b.IsComplete)
 						{
-							if (logop) trace(TraceOps.ProcStatus, st.FrameID, $"Out B: {st.BlockID} completed.");
+							if (logop) trace(LogFlags.ProcStatus, st.FrameID, $"Out B: {st.BlockID} completed.");
 							blocks.TryRemove(st.BlockID, out Block rem);
 							b.Dispose();
 						}
 						else
 						{
-							if (logop) trace(TraceOps.ProcStatus, st.FrameID,
+							if (logop) trace(LogFlags.ProcStatus, st.FrameID,
 								$"Re-beam B: {st.BlockID} M: {b.tileMap.ToString()}");
 
 							rebeam(b);
@@ -1060,7 +1056,7 @@ namespace brays
 				else
 				{
 					signal(st.FrameID, (int)SignalKind.UNK);
-					if (logop) trace(TraceOps.ProcStatus, st.FrameID, $"Unknown B: {st.BlockID}");
+					if (logop) trace(LogFlags.ProcStatus, st.FrameID, $"Unknown B: {st.BlockID}");
 				}
 			}
 		}
@@ -1072,23 +1068,23 @@ namespace brays
 #if DEBUG
 			if (cfg.dropFrame())
 			{
-				if (((TraceOps.DropFrame & cfg.Log.Flags) == TraceOps.DropFrame && cfg.Log.IsEnabled))
-					trace(TraceOps.DropFrame, sg.FrameID, $"ProcSignal M: {sg.Mark} R: {sg.RefID}");
+				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
+					trace(LogFlags.DropFrame, sg.FrameID, $"ProcSignal M: {sg.Mark} R: {sg.RefID}");
 				return;
 			}
 #endif
-			if (!isClone(TraceOps.ProcSignal, sg.FrameID))
+			if (!isClone(LogFlags.ProcSignal, sg.FrameID))
 			{
-				var logop = ((TraceOps.ProcSignal & cfg.Log.Flags) == TraceOps.ProcSignal && cfg.Log.IsEnabled);
+				var logop = ((LogFlags.ProcSignal & cfg.Log.Flags) == LogFlags.ProcSignal && cfg.Log.IsEnabled);
 
 				if (signalAwaits.TryGetValue(sg.RefID, out SignalAwait sa) && sa.OnSignal != null)
 					try
 					{
-						if (logop) trace(TraceOps.ProcSignal, sg.FrameID, $"M: {sg.Mark} R: {sg.RefID}");
+						if (logop) trace(LogFlags.ProcSignal, sg.FrameID, $"M: {sg.Mark} R: {sg.RefID}");
 						sa.OnSignal(sg.Mark);
 					}
 					catch { }
-				else if (logop) trace(TraceOps.ProcSignal, sg.FrameID, $"NoAwait M: {sg.Mark} R: {sg.RefID}");
+				else if (logop) trace(LogFlags.ProcSignal, sg.FrameID, $"NoAwait M: {sg.Mark} R: {sg.RefID}");
 			}
 		}
 
@@ -1149,7 +1145,6 @@ namespace brays
 						}
 						else
 						{
-							trace("Receive", $"Read 0 bytes from socket. Retries: {retries}");
 							frag.Dispose();
 
 							if (Interlocked.Increment(ref retries) > cfg.MaxReceiveRetries) break;
@@ -1160,7 +1155,7 @@ namespace brays
 					catch (SocketException) { }         // Don't care, don't want to log.
 					catch (Exception ex)
 					{
-						trace("Ex", "Receive", ex.ToString());
+						trace(LogFlags.Exception, 0, "Receive", ex.ToString());
 					}
 
 			trace("Receive", "Not listening.");
@@ -1176,9 +1171,8 @@ namespace brays
 
 				try
 				{
-#if DEBUG
-					trace("Cleanup", $"Blocks: {blocks.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
-#endif
+					trace(LogFlags.Cleanup, 0, $"Blocks: {blocks.Count} SignalAwaits: {signalAwaits.Count} SentSignals: {sentSignalsFor.Count}");
+
 					foreach (var b in blocks.Values)
 						if (DateTime.Now.Subtract(b.sentTime) > cfg.SentBlockRetention)
 						{
@@ -1204,7 +1198,7 @@ namespace brays
 				}
 				catch (Exception ex)
 				{
-					trace("Ex", "Cleanup", ex.ToString());
+					trace(LogFlags.Exception, 0, ex.Message, ex.ToString());
 				}
 
 				await Task.Delay(cfg.CleanupFreqMS).ConfigureAwait(false);
@@ -1218,7 +1212,7 @@ namespace brays
 			try
 			{
 				int c = 0;
-				var logop = (TraceOps.ReqTiles & cfg.Log.Flags) == TraceOps.ReqTiles && cfg.Log.IsEnabled;
+				var logop = (LogFlags.ReqTiles & cfg.Log.Flags) == LogFlags.ReqTiles && cfg.Log.IsEnabled;
 
 				while (!IsStopped && !b.IsComplete && !b.isFaulted && !b.isRejected)
 				{
@@ -1226,7 +1220,7 @@ namespace brays
 
 					if (b.timeToReqTiles(cfg.WaitAfterAllSentMS) && b.RemainingTiles > 0)
 					{
-						if (logop) trace(TraceOps.ReqTiles, 0, $"B: {b.ID} MT: {b.MarkedTiles}/{b.TilesCount} #{c++}");
+						if (logop) trace(LogFlags.ReqTiles, 0, $"B: {b.ID} MT: {b.MarkedTiles}/{b.TilesCount} #{c++}");
 
 						using (var frag = outHighway.Alloc(b.tileMap.Bytes))
 						{
@@ -1236,11 +1230,11 @@ namespace brays
 					}
 				}
 
-				if (logop) trace(TraceOps.ReqTiles, 0, $"Out-of-ReqTiles B: {b.ID} IsComplete: {b.IsComplete}");
+				if (logop) trace(LogFlags.ReqTiles, 0, $"Out-of-ReqTiles B: {b.ID} IsComplete: {b.IsComplete}");
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", ex.Message, ex.ToString());
+				trace(LogFlags.Exception, 0, "ReqMissingTiles", ex.ToString());
 			}
 		}
 
@@ -1250,7 +1244,7 @@ namespace brays
 
 			try
 			{
-				var logop = (TraceOps.AutoPulse & cfg.Log.Flags) == TraceOps.AutoPulse && cfg.Log.IsEnabled;
+				var logop = (LogFlags.AutoPulse & cfg.Log.Flags) == LogFlags.AutoPulse && cfg.Log.IsEnabled;
 
 				while (!IsStopped && cfg.EnablePulsing)
 				{
@@ -1261,7 +1255,7 @@ namespace brays
 					if (Monitor.TryEnter(packLock, 0))
 						try
 						{
-							if (logop) trace(TraceOps.AutoPulse, 0, $"Len: {packTileOffset}");
+							if (logop) trace(LogFlags.AutoPulse, 0, $"Len: {packTileOffset}");
 							pulseAndReload();
 						}
 						finally
@@ -1272,10 +1266,10 @@ namespace brays
 			}
 			catch (Exception ex)
 			{
-				trace("Ex", "AutoPulse", ex.ToString());
+				trace(LogFlags.Exception, 0, "AutoPulse", ex.ToString());
 			}
 
-			trace("AutoPulse", "Not pulsing");
+			trace(LogFlags.AutoPulse, 0, "Not pulsing");
 		}
 
 		void schedule(CallbackThread cbt, MemoryFragment f, bool disposeOnEx = true)
@@ -1313,49 +1307,54 @@ namespace brays
 				if (disposeOnEx) f?.Dispose();
 
 				if (cfg.Log.LogUnhandledCallbackExceptions)
-					trace("Ex", "Callback", aex.Flatten().ToString());
+					trace(LogFlags.Exception, 0, "Callback", aex.Flatten().ToString());
 			}
 			catch (Exception ex)
 			{
 				if (disposeOnEx) f?.Dispose();
 
 				if (cfg.Log.LogUnhandledCallbackExceptions)
-					trace("Ex", "Callback", ex.ToString());
+					trace(LogFlags.Exception, 0, "Callback", ex.ToString());
 			}
 		}
 
-		void trace(TraceOps op, int frame, string title, string msg = null)
+		void trace(LogFlags op, int frame, string title, string msg = null)
 		{
+			if (log == null) return;
+
 			// [!!] DO NOT CHANGE THE FORMAT OFFSETS
 			// The logmerge tool relies on hard-coded positions to parse the log lines.
 
 			string ttl = string.Empty;
 			switch (op)
 			{
-				case TraceOps.Beam:
-				case TraceOps.Status:
-				case TraceOps.Signal:
-				case TraceOps.Tile:
-				case TraceOps.AutoPulse:
+				case LogFlags.Beam:
+				case LogFlags.Status:
+				case LogFlags.Signal:
+				case LogFlags.Tile:
+				case LogFlags.AutoPulse:
 				ttl = string.Format("{0,11}:o {1, -12} {2}", frame, op, title);
 				break;
-				case TraceOps.ReqTiles:
+				case LogFlags.ReqTiles:
+				case LogFlags.LockOn:
+				case LogFlags.Exception:
+				case LogFlags.Cleanup:
 				ttl = string.Format("{0,-13} {1, -12} {2}", " ", op, title);
 				break;
-				case TraceOps.ProcBlock:
-				case TraceOps.ProcError:
-				case TraceOps.ProcStatus:
-				case TraceOps.ProcSignal:
-				case TraceOps.ProcTile:
-				case TraceOps.ProcPulse:
+				case LogFlags.ProcBlock:
+				case LogFlags.ProcError:
+				case LogFlags.ProcStatus:
+				case LogFlags.ProcSignal:
+				case LogFlags.ProcTile:
+				case LogFlags.ProcPulse:
 				ttl = string.Format("{0,11}:i {1, -12} {2}", frame, op, title);
 				break;
 #if DEBUG
-				case TraceOps.DropFrame:
+				case LogFlags.DropFrame:
 				ttl = string.Format("{0,11}:i {1, -12} {2}", frame, op, title);
 				break;
 #endif
-				case TraceOps.None:
+				case LogFlags.None:
 				default:
 				return;
 			}
@@ -1374,7 +1373,7 @@ namespace brays
 				var s = string.Format("{0,-13} {1, -12} {2}", " ", op, title);
 				log.Write(s, msg);
 				if (cfg.Log.OnTrace != null)
-					try { cfg.Log.OnTrace(TraceOps.None, s, msg); }
+					try { cfg.Log.OnTrace(LogFlags.None, s, msg); }
 					catch { }
 			}
 		}

@@ -10,7 +10,7 @@ namespace brays
 	public class BeamerLogCfg
 	{
 		public BeamerLogCfg(
-			string filePath, bool enabled = true, TraceOps trace = (TraceOps)((1 << 14) - 1),
+			string filePath, bool enabled = true, LogFlags trace = (LogFlags)((1 << 17) - 1),
 			string ext = "brays", int rotSizeKb = 5000)
 		{
 			LogFilePath = filePath;
@@ -26,12 +26,12 @@ namespace brays
 		public bool RotateLogAtStart = true;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool IsOn(TraceOps op) => (op & Flags) == op && IsEnabled;
+		public bool IsOn(LogFlags op) => (op & Flags) == op && IsEnabled;
 
 		/// <summary>
 		/// If not null will be invoked on each trace.
 		/// </summary>
-		public Action<TraceOps, string, string> OnTrace;
+		public Action<LogFlags, string, string> OnTrace;
 
 		/// <summary>
 		/// The trace file path.
@@ -56,7 +56,7 @@ namespace brays
 		/// <summary>
 		/// The trace-enabled ops.
 		/// </summary>
-		public TraceOps Flags;
+		public LogFlags Flags;
 
 		/// <summary>
 		/// If true, exceptions from the consumer's callback will be logged.

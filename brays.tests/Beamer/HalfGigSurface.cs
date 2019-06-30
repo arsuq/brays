@@ -93,7 +93,7 @@ namespace brays.tests
 					}
 				}
 
-				var traceops = (TraceOps.ReqTiles | TraceOps.Tile | TraceOps.ProcTile);
+				var traceops = (LogFlags.ReqTiles | LogFlags.Tile | LogFlags.ProcTile);
 
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{

@@ -31,6 +31,10 @@ namespace brays.tests
 
 		async Task WithCheck(TestArgs targ)
 		{
+			const int PULSE_RETENTION = 0;
+
+			$"WithCheck, PulseRetentionMS: {PULSE_RETENTION}".AsInfo();
+
 			Beamer rayA = null;
 			Beamer rayB = null;
 
@@ -154,6 +158,10 @@ namespace brays.tests
 
 		async Task NoCheck(TestArgs targ)
 		{
+			int PULSE_RETENTION = new BeamerCfg().PulseRetentionMS;
+
+			$"WithoutCheck, PulseRetentionMS: {PULSE_RETENTION}".AsInfo();
+
 			Beamer rayA = null;
 			Beamer rayB = null;
 
