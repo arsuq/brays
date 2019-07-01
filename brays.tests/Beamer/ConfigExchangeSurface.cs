@@ -34,7 +34,7 @@ namespace brays.tests
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
 					UseTCP = targ.UseTCP,
-					Log = new BeamerLogCfg("rayA", targ.Log),
+					Log = new BeamerLogCfg("rayA-ConfigExchange", targ.Log),
 					MaxBeamedTilesAtOnce = CFGA
 #if DEBUG
 					, dropFrames = true,
@@ -45,7 +45,7 @@ namespace brays.tests
 				rayB = new Beamer((f) => { }, new BeamerCfg()
 				{
 					UseTCP = targ.UseTCP,
-					Log = new BeamerLogCfg("rayB", targ.Log),
+					Log = new BeamerLogCfg("rayB-ConfigExchange", targ.Log),
 					MaxBeamedTilesAtOnce = CFGB
 #if DEBUG
 					, dropFrames = true,

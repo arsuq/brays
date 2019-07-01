@@ -381,6 +381,7 @@ namespace brays
 				}
 
 			b.sentTime = DateTime.Now;
+
 			return await status(b.ID, sent, true, null).ConfigureAwait(false);
 		}
 
@@ -534,7 +535,9 @@ namespace brays
 
 			if (onTileXAwait != null) tileXAwaits.TryAdd(fid, new TileXAwait(onTileXAwait));
 
-			if (signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
+			// [i] If TCP no need of SignalAwait  
+
+			if (cfg.UseTCP || signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 				{
 					Volatile.Write(ref rsp, mark);
 					rst.Set(true);
@@ -560,6 +563,12 @@ namespace brays
 						if (logop)
 							if (sent == frag.Length) trace(LogFlags.Tile, fid, $"K: {(Lead)kind} b:{sent} #{i + 1}");
 							else trace(LogFlags.Tile, fid, $"Failed K: {(Lead)kind}");
+
+						if (cfg.UseTCP && sent > 0)
+						{
+							rsp = (int)SignalKind.ACK;
+							rst.Set(1, false);
+						}
 
 						if (await rst.Wait(awaitMS) > 0) break;
 						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
@@ -945,6 +954,15 @@ namespace brays
 		void procBlock(MemoryFragment frag)
 		{
 			var f = new FRAME(frag.Span());
+
+#if ASSERT
+			var at = f.Length + FRAME.HEADER;
+			var f2 = new FRAME(frag.Span().Slice(at));
+
+			if (f2.Kind == (byte)Lead.Block && Math.Abs(f2.FrameID - f.FrameID) < 100)
+				throw new Exception("Multiple frames received.");
+#endif
+
 #if DEBUG
 			if (cfg.dropFrame())
 			{
@@ -1144,7 +1162,7 @@ namespace brays
 						var frag = inHighway.Alloc(UDP_MAX);
 						var read = await socket.ReceiveAsync(frag, SocketFlags.None, cancel.Token).ConfigureAwait(false);
 
-						// [!] At the time of writing cancellations throw ObjectDisposed ex,
+						// [!] At the time of writing the cancellations throw ObjectDisposed ex,
 						// thus the following graceful exit will be bypassed.
 						if (cancel.IsCancellationRequested) break;
 

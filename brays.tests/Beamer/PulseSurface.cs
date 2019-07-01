@@ -56,7 +56,7 @@ namespace brays.tests
 						UseTCP = targ.UseTCP,
 						EnablePulsing = true,
 						PulseRetentionMS = 0,
-						Log = new BeamerLogCfg("rayA", targ.Log)
+						Log = new BeamerLogCfg("rayA-Pulse", targ.Log)
 					});
 
 				rayB = new Beamer((f) =>
@@ -97,7 +97,7 @@ namespace brays.tests
 				}, new BeamerCfg()
 				{
 					UseTCP = targ.UseTCP,
-					Log = new BeamerLogCfg("rayB", targ.Log)
+					Log = new BeamerLogCfg("rayB-Pulse", targ.Log)
 				});
 
 				using (var hw = new HeapHighway())

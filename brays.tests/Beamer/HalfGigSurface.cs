@@ -103,7 +103,7 @@ namespace brays.tests
 				rayB = new Beamer(receive, new BeamerCfg()
 				{
 					UseTCP = targ.UseTCP,
-					Log = new BeamerLogCfg("rayB", targ.Log, traceops),
+					Log = new BeamerLogCfg("rayB-HalfGig", targ.Log, traceops),
 					TileSizeBytes = 60000
 				});
 

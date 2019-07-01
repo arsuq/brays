@@ -51,22 +51,22 @@ namespace brays
 			// [!] Must use the same tcs instance for waiting and in the Timeout callback.
 			var tcsr = Volatile.Read(ref tcs);
 
-			if (timeout != Timeout.InfiniteTimeSpan)
-				System.Threading.Tasks.Task.Delay(timeout).ContinueWith((t, o) =>
-				{
-					// [!] Work only with the original TCS
-					var tcso = o as TaskCompletionSource<int>;
-
-					// If not completed - reload another TCS.
-					if (tcso.Task.Status != TaskStatus.RanToCompletion)
+			if (tcsr.Task.Status != TaskStatus.RanToCompletion)
+				if (timeout != Timeout.InfiniteTimeSpan)
+					System.Threading.Tasks.Task.Delay(timeout).ContinueWith((t, o) =>
 					{
-						if (autoreset && IsAutoResetAllowed)
-							Interlocked.CompareExchange(ref tcs, new TaskCompletionSource<int>(), tcso);
+						// [!] Work only with the original TCS
+						var tcso = o as TaskCompletionSource<int>;
 
-						tcso.TrySetResult(-1);
-					}
+						// If not completed - reload another TCS.
+						if (tcso.Task.Status != TaskStatus.RanToCompletion)
+							{
+								if (autoreset && IsAutoResetAllowed)
+									Interlocked.CompareExchange(ref tcs, new TaskCompletionSource<int>(), tcso);
 
-				}, tcsr);
+								tcso.TrySetResult(-1);
+							}
+					}, tcsr);
 
 			return tcsr.Task;
 		}

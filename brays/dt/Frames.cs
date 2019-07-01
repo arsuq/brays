@@ -71,7 +71,6 @@ namespace brays
 		public readonly Span<byte> Data;
 
 		public const int HEADER = 20;
-		public int LENGTH => HEADER + Data.Length;
 	}
 
 	readonly ref struct SIGNAL

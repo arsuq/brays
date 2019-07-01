@@ -192,7 +192,7 @@ namespace brays
 #if DEBUG
 		internal bool dropFrame()
 		{
-			if (!dropFrames) return false;
+			if (!dropFrames || UseTCP) return false;
 			lock (rdm) return rdm.Next(100) < deopFramePercent;
 		}
 

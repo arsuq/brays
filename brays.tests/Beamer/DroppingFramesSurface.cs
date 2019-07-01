@@ -37,7 +37,7 @@ namespace brays.tests
 					new BeamerCfg()
 					{
 						UseTCP = targ.UseTCP,
-						Log = new BeamerLogCfg("rayA", targ.Log),
+						Log = new BeamerLogCfg("rayA-DroppingFrames", targ.Log),
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 30
@@ -75,7 +75,7 @@ namespace brays.tests
 				}, new BeamerCfg()
 				{
 					UseTCP = targ.UseTCP,
-					Log = new BeamerLogCfg("rayB", targ.Log),
+					Log = new BeamerLogCfg("rayB-DroppingFrames", targ.Log),
 #if DEBUG
 					dropFrames = true,
 					deopFramePercent = 30

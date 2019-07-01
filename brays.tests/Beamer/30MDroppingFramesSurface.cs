@@ -105,7 +105,7 @@ namespace brays.tests
 						new BeamerCfg()
 						{
 							UseTCP = targ.UseTCP,
-							Log = new BeamerLogCfg("rayA", targ.Log) { OnTrace = null },
+							Log = new BeamerLogCfg("rayA-DroppingFrames30M", targ.Log) { OnTrace = null },
 #if DEBUG
 							dropFrames = true,
 							deopFramePercent = 20
@@ -116,7 +116,7 @@ namespace brays.tests
 					rayB = new Beamer(receive, new BeamerCfg()
 					{
 						UseTCP = targ.UseTCP,
-						Log = new BeamerLogCfg("rayB", targ.Log) { OnTrace = null },
+						Log = new BeamerLogCfg("rayB-DroppingFrames30M", targ.Log) { OnTrace = null },
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = 20

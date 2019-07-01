@@ -67,7 +67,7 @@ namespace brays.tests
 					new BeamerCfg()
 					{
 						UseTCP = targ.UseTCP,
-						Log = new BeamerLogCfg("rayA", targ.Log),
+						Log = new BeamerLogCfg("rayA-EndpointChange", targ.Log),
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = DROPPED_FRAMES_PERCENT
@@ -78,7 +78,7 @@ namespace brays.tests
 					rayB = new Beamer(receive, new BeamerCfg()
 					{
 						UseTCP = targ.UseTCP,
-						Log = new BeamerLogCfg("rayB", targ.Log),
+						Log = new BeamerLogCfg("rayB-EndpointChange", targ.Log),
 #if DEBUG
 						dropFrames = true,
 						deopFramePercent = DROPPED_FRAMES_PERCENT
@@ -91,13 +91,13 @@ namespace brays.tests
 					{
 						await rayA.LockOn(aep, bep, -1);
 
-						Task.Delay(100).ContinueWith(async (t) =>
+						Task.Delay(20).ContinueWith(async (t) =>
 						{
 							try
 							{
 								"Changing the source endpoint...".AsInfo();
 								rayA.Source.Port = 9999;
-								if (!rayA.ConfigPush().Result)
+								if (!await rayA.ConfigPush())
 								{
 									Passed = false;
 									FailureMessage = "Faiiled to push the updated config";

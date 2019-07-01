@@ -35,7 +35,7 @@ namespace brays.tests
 					new BeamerCfg()
 					{
 						UseTCP = targ.UseTCP,
-						Log = new BeamerLogCfg("rayA", targ.Log)
+						Log = new BeamerLogCfg("rayA-OneMeg", targ.Log)
 					});
 				rayB = new Beamer((f) =>
 				{
@@ -69,7 +69,7 @@ namespace brays.tests
 				}, new BeamerCfg()
 				{
 					UseTCP = targ.UseTCP,
-					Log = new BeamerLogCfg("rayB", targ.Log)
+					Log = new BeamerLogCfg("rayB-OneMeg", targ.Log)
 				});
 
 				using (var hw = new HeapHighway())
