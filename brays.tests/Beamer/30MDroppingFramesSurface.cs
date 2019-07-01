@@ -104,6 +104,7 @@ namespace brays.tests
 						},
 						new BeamerCfg()
 						{
+							UseTCP = targ.UseTCP,
 							Log = new BeamerLogCfg("rayA", targ.Log) { OnTrace = null },
 #if DEBUG
 							dropFrames = true,
@@ -114,6 +115,7 @@ namespace brays.tests
 				if (targ.B)
 					rayB = new Beamer(receive, new BeamerCfg()
 					{
+						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayB", targ.Log) { OnTrace = null },
 #if DEBUG
 						dropFrames = true,
@@ -127,8 +129,7 @@ namespace brays.tests
 					{
 						var ta = new Task(async () =>
 						{
-							rayA.LockOn(aep, bep);
-
+							await rayA.LockOn(aep, bep);
 							await rayA.TargetIsActive();
 
 							while (!rayA.IsStopped)
@@ -158,7 +159,7 @@ namespace brays.tests
 
 					if (targ.B)
 					{
-						if (!rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
+						if (! await rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
 					}
 
 					if (!rst.WaitOne(new TimeSpan(0, 2, 0)))

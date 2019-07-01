@@ -29,20 +29,23 @@ namespace brays.tests
 
 				a = new Beamer((_) => { }, new BeamerCfg()
 				{
+					UseTCP = targ.UseTCP,
 					EnableProbes = true,
 					ProbeFreqMS = 400
 				});
 
 				b = new Beamer((_) => { }, new BeamerCfg()
 				{
+					UseTCP = targ.UseTCP,
 					EnableProbes = true,
 					ProbeFreqMS = 100
 				});
 
-				a.LockOn(s, t);
-				b.LockOn(t, s);
+				var ac = a.LockOn(s, t);
+				var bc = b.LockOn(t, s);
 
 				await Task.Delay(2000);
+				Task.WaitAll(ac, bc);
 
 				var ap = DateTime.Now.Subtract(b.LastProbe).TotalMilliseconds;
 				var bp = DateTime.Now.Subtract(a.LastProbe).TotalMilliseconds;

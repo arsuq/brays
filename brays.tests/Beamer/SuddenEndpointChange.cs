@@ -66,6 +66,7 @@ namespace brays.tests
 					rayA = new Beamer((f) => { },
 					new BeamerCfg()
 					{
+						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayA", targ.Log),
 #if DEBUG
 						dropFrames = true,
@@ -76,6 +77,7 @@ namespace brays.tests
 				if (targ.B)
 					rayB = new Beamer(receive, new BeamerCfg()
 					{
+						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayB", targ.Log),
 #if DEBUG
 						dropFrames = true,
@@ -89,7 +91,7 @@ namespace brays.tests
 					{
 						await rayA.LockOn(aep, bep, -1);
 
-						Task.Delay(80).ContinueWith((t) =>
+						Task.Delay(100).ContinueWith(async (t) =>
 						{
 							try
 							{
@@ -103,7 +105,7 @@ namespace brays.tests
 								}
 								else
 								{
-									if (rayA.LockOn(rayA.Source, rayA.Target))
+									if (await rayA.LockOn(rayA.Source, rayA.Target))
 										$"The beamer locked on {rayA.Source.ToString()}".AsInfo();
 									else
 									{
@@ -135,10 +137,10 @@ namespace brays.tests
 
 				if (targ.B)
 				{
-					if (!rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
+					if (! await rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
 				}
 
-				if (!rst.WaitOne(new TimeSpan(0, 2, 0)))
+				if (!rst.WaitOne(new TimeSpan(0, 1, 0)))
 				{
 					Passed = false;
 					FailureMessage = "Timeout.";

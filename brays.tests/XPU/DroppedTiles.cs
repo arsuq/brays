@@ -46,6 +46,7 @@ namespace brays.tests
 			var a = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {
+					 UseTCP = ta.UseTCP,
 					 Log = new BeamerLogCfg("a", ta.Log)
 #if DEBUG
 					 ,dropFrames = true,
@@ -58,6 +59,7 @@ namespace brays.tests
 			var b = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {
+					 UseTCP = ta.UseTCP,
 					 Log = new BeamerLogCfg("b", ta.Log)
 #if DEBUG
 					 ,dropFrames = true,

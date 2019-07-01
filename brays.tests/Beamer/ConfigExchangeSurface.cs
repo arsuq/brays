@@ -33,6 +33,7 @@ namespace brays.tests
 
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
+					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayA", targ.Log),
 					MaxBeamedTilesAtOnce = CFGA
 #if DEBUG
@@ -43,6 +44,7 @@ namespace brays.tests
 
 				rayB = new Beamer((f) => { }, new BeamerCfg()
 				{
+					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB", targ.Log),
 					MaxBeamedTilesAtOnce = CFGB
 #if DEBUG
@@ -53,7 +55,7 @@ namespace brays.tests
 
 				var ta = new Task(async () =>
 				{
-					if (rayA.LockOn(aep, bep) && await rayA.ConfigRequest())
+					if (await rayA.LockOn(aep, bep) && await rayA.ConfigRequest())
 					{
 						// The remote config must be available here
 						var tc = rayA.GetTargetConfig();
@@ -67,7 +69,7 @@ namespace brays.tests
 
 				var tb = new Task(async () =>
 				{
-					if (rayB.LockOn(bep, aep) && await rayB.ConfigRequest())
+					if (await rayB.LockOn(bep, aep) && await rayB.ConfigRequest())
 					{
 						var tc = rayB.GetTargetConfig();
 						if (tc == null || tc.MaxBeamedTilesAtOnce != CFGA)

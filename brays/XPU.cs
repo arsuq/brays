@@ -57,7 +57,7 @@ namespace brays
 		/// <param name="target">The remote endpoint</param>
 		/// <returns>True if succeeds</returns>
 		public bool Start(IPEndPoint listen, IPEndPoint target) =>
-			 beamer.LockOn(listen, target);
+			 beamer.LockOn(listen, target).Result;
 
 		public Task<bool> TargetIsActive(int timeout = -1) => beamer.TargetIsActive(timeout);
 

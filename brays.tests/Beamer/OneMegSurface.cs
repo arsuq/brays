@@ -32,7 +32,11 @@ namespace brays.tests
 
 				rayA = new Beamer(
 					(f) => { Console.WriteLine("?"); },
-					new BeamerCfg() { Log = new BeamerLogCfg("rayA", targ.Log) });
+					new BeamerCfg()
+					{
+						UseTCP = targ.UseTCP,
+						Log = new BeamerLogCfg("rayA", targ.Log)
+					});
 				rayB = new Beamer((f) =>
 				{
 					try
@@ -62,13 +66,17 @@ namespace brays.tests
 					{
 						rst.Set();
 					}
-				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", targ.Log) });
+				}, new BeamerCfg()
+				{
+					UseTCP = targ.UseTCP,
+					Log = new BeamerLogCfg("rayB", targ.Log)
+				});
 
 				using (var hw = new HeapHighway())
 				{
 					var ta = new Task(async () =>
 					{
-						rayA.LockOn(aep, bep) ;
+						await rayA.LockOn(aep, bep);
 
 						var f = hw.Alloc(MEG);
 
@@ -78,9 +86,9 @@ namespace brays.tests
 						await rayA.Beam(f);
 					});
 
-					var tb = new Task(() =>
+					var tb = new Task(async () =>
 					{
-						rayB.LockOn(bep, aep);
+						await rayB.LockOn(bep, aep);
 					});
 
 					ta.Start();

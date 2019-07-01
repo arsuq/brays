@@ -26,6 +26,21 @@ namespace brays
 		}
 
 		/// <summary>
+		/// By default is false.
+		/// </summary>
+		public bool UseTCP;
+
+		/// <summary>
+		/// The Default is 2min.
+		/// </summary>
+		public TimeSpan TCPConnectTimeout = new TimeSpan(0, 2, 0);
+
+		/// <summary>
+		/// The default values is 400ms;
+		/// </summary>
+		public int TCPConnectRetryDelayMS = 400;
+
+		/// <summary>
 		/// Pulsing reserves one thread for arranging packets into dgrams.
 		/// This is useful when one needs to send large number of tiny messages
 		/// as they are zipped together into few tiles.

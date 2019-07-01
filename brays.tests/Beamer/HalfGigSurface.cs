@@ -97,20 +97,21 @@ namespace brays.tests
 
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
-					//Log = new LogCfg("rayA", true, traceops),
+					UseTCP = targ.UseTCP,
 					TileSizeBytes = 60000
 				});
 				rayB = new Beamer(receive, new BeamerCfg()
 				{
+					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB", targ.Log, traceops),
 					TileSizeBytes = 60000
 				});
 
 				using (var hw = new HeapHighway())
 				{
-					var ta = new Task(() =>
+					var ta = new Task(async () =>
 					{
-						rayA.LockOn(aep, bep);
+						await rayA.LockOn(aep, bep);
 
 						while (!rayA.IsStopped)
 						{
@@ -127,9 +128,9 @@ namespace brays.tests
 						$"Out of beaming loop".AsInnerInfo();
 					});
 
-					var tb = new Task(() =>
+					var tb = new Task(async () =>
 					{
-						rayB.LockOn(bep, aep);
+						await rayB.LockOn(bep, aep);
 					});
 
 					ta.Start();

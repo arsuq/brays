@@ -36,6 +36,7 @@ namespace brays.tests
 					(f) => { },
 					new BeamerCfg()
 					{
+						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayA", targ.Log),
 #if DEBUG
 						dropFrames = true,
@@ -73,6 +74,7 @@ namespace brays.tests
 					}
 				}, new BeamerCfg()
 				{
+					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB", targ.Log),
 #if DEBUG
 					dropFrames = true,
@@ -82,7 +84,7 @@ namespace brays.tests
 
 				using (var hw = new HeapHighway())
 				{
-					if (rayB.LockOn(bep, aep) && rayA.LockOn(aep, bep) && await rayA.TargetIsActive())
+					if (await rayB.LockOn(bep, aep) && await rayA.LockOn(aep, bep) && await rayA.TargetIsActive())
 					{
 						var f = hw.Alloc(MEG);
 

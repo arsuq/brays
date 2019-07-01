@@ -40,6 +40,7 @@ namespace brays.tests
 			}
 
 			Log = !(args.ContainsKey("*") && args["*"].Exists(x => x == "nolog"));
+			UseTCP = args.ContainsKey("*") && args["*"].Exists(x => x == "tcp");
 		}
 
 		public bool A => this.Beamers == Beamers.A || this.Beamers == Beamers.Both;
@@ -50,6 +51,7 @@ namespace brays.tests
 		public readonly bool IsLocalOnly;
 		public readonly Beamers Beamers;
 		public readonly bool Log;
+		public readonly bool UseTCP;
 
 		const int APORT = 3210;
 		const int BPORT = 3211;

@@ -91,6 +91,8 @@ namespace brays
 		/// <returns>False on timeout.</returns>
 		public Task<bool> TargetIsActive(int awaitMS = -1)
 		{
+			if (socket.ProtocolType == ProtocolType.Tcp) return Task.FromResult(true);
+
 			var tcs = new TaskCompletionSource<bool>();
 			ThreadPool.RegisterWaitForSingleObject(probeReqAwait,
 				(_, to) => tcs.TrySetResult(!to), null, awaitMS, true);
@@ -120,7 +122,7 @@ namespace brays
 		/// <param name="listen">The local endpoint.</param>
 		/// <param name="target">The remote endpoint.</param>
 		/// <returns>True on success.</returns>
-		public bool LockOn(IPEndPoint listen, IPEndPoint target)
+		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target)
 		{
 			var r = false;
 
@@ -137,9 +139,21 @@ namespace brays
 
 					if (socket != null) socket.Dispose();
 
-					socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-					socket.Bind(this.source);
-					socket.Connect(target);
+					if (cfg.UseTCP)
+					{
+						socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+						socket.Bind(this.source);
+						if (!await tcpConnect(
+							(int)cfg.TCPConnectTimeout.TotalMilliseconds,
+							cfg.TCPConnectRetryDelayMS)) return false;
+					}
+					else
+					{
+						socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+						socket.Bind(this.source);
+						socket.Connect(target);
+					}
+
 					socket.ReceiveBufferSize = cfg.ReceiveBufferSize;
 					socket.SendBufferSize = cfg.SendBufferSize;
 
@@ -187,12 +201,12 @@ namespace brays
 		/// <param name="target">The remote endpoint.</param>
 		/// <param name="awaitMS">Infinite timeout is -1.</param>
 		/// <returns>False if either LockOn or TargetIsActive return false.</returns>
-		public Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS)
+		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS)
 		{
-			if (LockOn(listen, target))
-				return TargetIsActive(awaitMS);
+			if (await LockOn(listen, target))
+				return await TargetIsActive(awaitMS);
 
-			return Task.FromResult(false);
+			return false;
 		}
 
 		/// <summary>
@@ -1098,7 +1112,7 @@ namespace brays
 				var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
 				if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
 
-				if (!Source.Equals(target)) LockOn(source, tep);
+				if (!Source.Equals(target)) LockOn(source, tep).Wait();
 			}
 		}
 
@@ -1270,6 +1284,30 @@ namespace brays
 			}
 
 			trace(LogFlags.AutoPulse, 0, "Not pulsing");
+		}
+
+		Task<bool> tcpConnect(int timeoutMS, int attemptDelayMS)
+		{
+			var t = new TaskCompletionSource<bool>();
+
+			if (timeoutMS > 0) Task.Delay(timeoutMS).ContinueWith((_) => t.TrySetResult(false));
+
+			Task.Run(async () =>
+			{
+				while (!t.Task.IsCompleted)
+				{
+					try
+					{
+						await Task.Delay(attemptDelayMS);
+						socket.Connect(target);
+						t.TrySetResult(true);
+						break;
+					}
+					catch { }
+				}
+			});
+
+			return t.Task;
 		}
 
 		void schedule(CallbackThread cbt, MemoryFragment f, bool disposeOnEx = true)

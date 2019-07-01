@@ -53,6 +53,7 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
+						UseTCP = targ.UseTCP,
 						EnablePulsing = true,
 						PulseRetentionMS = 0,
 						Log = new BeamerLogCfg("rayA", targ.Log)
@@ -92,7 +93,12 @@ namespace brays.tests
 						if (f != null) f.Dispose();
 					}
 
-				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", targ.Log) });
+
+				}, new BeamerCfg()
+				{
+					UseTCP = targ.UseTCP,
+					Log = new BeamerLogCfg("rayB", targ.Log)
+				});
 
 				using (var hw = new HeapHighway())
 				{
@@ -100,7 +106,7 @@ namespace brays.tests
 					{
 						await Task.Yield();
 
-						rayA.LockOn(aep, bep);
+						await rayA.LockOn(aep, bep);
 						var rdm = new Random();
 
 						while (true)
@@ -209,7 +215,7 @@ namespace brays.tests
 				{
 					await Task.Yield();
 
-					rayA.LockOn(aep, bep);
+					await rayA.LockOn(aep, bep);
 					var rdm = new Random();
 
 					while (true)
@@ -233,9 +239,9 @@ namespace brays.tests
 					rayA.trace("Out of pulsing", null);
 				});
 
-				var tb = new Task(() =>
+				var tb = new Task(async () =>
 				{
-					rayB.LockOn(bep, aep);
+					await rayB.LockOn(bep, aep);
 				});
 
 				ta.Start();
