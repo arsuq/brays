@@ -24,7 +24,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MemoryLanes" Version="2.1.0" />
+    <PackageReference Include="MemoryLanes" Version="2.1.0.1" />
   </ItemGroup>
 
 </Project>
