@@ -37,7 +37,7 @@ namespace brays
 			this.cfg = cfg;
 			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
 			blockHighway = cfg.ReceiveHighway;
-			tileXHigheay = cfg.TileExchangeHighway;
+			tileXHighway = cfg.TileExchangeHighway;
 
 			if (cfg.Log != null && cfg.Log.IsEnabled)
 				log = new Log(cfg.Log.LogFilePath, cfg.Log.Ext, cfg.Log.RotationLogFileKB, cfg.Log.RotateLogAtStart);
@@ -57,12 +57,12 @@ namespace brays
 					lockOnGate.Exit();
 					outHighway?.Dispose();
 					blockHighway?.Dispose();
-					tileXHigheay?.Dispose();
+					tileXHighway?.Dispose();
 					socket?.Close();
 					socket?.Dispose();
 					outHighway = null;
 					blockHighway = null;
-					tileXHigheay = null;
+					tileXHighway = null;
 
 					if (log != null) log.Dispose();
 					if (blocks != null)
@@ -244,21 +244,30 @@ namespace brays
 		/// Sends the fragment to the target beamer in TotalReBeamsCount retries, awaiting BeamAwaitMS on failure.
 		/// </summary>
 		/// <param name="f">The data to transfer.</param>
-		/// <returns></returns>
-		public async Task<bool> Beam(MemoryFragment f)
+		/// <param name="timeoutMS">By default is infinite (-1).</param>
+		/// <returns>False on failure, including a timeout.</returns>
+		public async Task<bool> Beam(MemoryFragment f, int timeoutMS = -1)
 		{
+			Block b = null;
+
 			try
 			{
 				if (f.Length <= cfg.TileSizeBytes)
-					return await tilex((byte)Lead.Tile, f).ConfigureAwait(false) == (int)SignalKind.ACK;
+					return await tilex((byte)Lead.Tile, f, null, 0, 0, 0, 0, null, timeoutMS)
+						.ConfigureAwait(false) == (int)SignalKind.ACK;
 				else
 				{
 					var bid = Interlocked.Increment(ref blockCounter);
-					var b = new Block(bid, cfg.TileSizeBytes, f);
+					b = new Block(bid, cfg.TileSizeBytes, f);
 
-					blocks.TryAdd(bid, b);
-					b.beamTiles = beamLoop(b);
-					return await b.beamTiles.ConfigureAwait(false);
+					if (blocks.TryAdd(bid, b))
+					{
+						if (timeoutMS > 0) Task.Delay(timeoutMS).ContinueWith((x) => b.beamLoop.SetResult(false));
+						beamLoop(b);
+
+						return await b.beamLoop.Task.ConfigureAwait(false);
+					}
+					else return false;
 				}
 			}
 			catch (AggregateException aex)
@@ -341,13 +350,20 @@ namespace brays
 						}
 						else
 						{
-							using (var mf = outHighway.Alloc(dgramLen))
+							try
 							{
-								FRAME.Make(fid, b.ID, b.TotalSize, i,
-									(ushort)(dgramLen - FRAME.HEADER), 0,
-									b.Fragment.Span().Slice(0, dgramLen - FRAME.HEADER), mf);
 
-								sentBytes = socket.Send(mf);
+								using (var mf = outHighway.Alloc(dgramLen))
+								{
+									FRAME.Make(fid, b.ID, b.TotalSize, i,
+										(ushort)(dgramLen - FRAME.HEADER), 0,
+										b.Fragment.Span().Slice(0, dgramLen - FRAME.HEADER), mf);
+
+									sentBytes = socket.Send(mf);
+								}
+							}
+							catch (Exception ex)
+							{
 							}
 						}
 
@@ -385,19 +401,20 @@ namespace brays
 			return await status(b.ID, sent, true, null).ConfigureAwait(false);
 		}
 
-		async Task<bool> beamLoop(Block b)
+		async Task beamLoop(Block b)
 		{
+			// Force scheduling
+			await Task.Yield();
+
+			if (Interlocked.Increment(ref b.isInBeamLoop) > 1) throw new Exception("Concurrent beams");
+
 			try
 			{
 				for (int i = 0; i < cfg.TotalReBeamsCount; i++)
 					if (await beam(b).ConfigureAwait(false) == (int)SignalKind.ACK)
 					{
-						if (Interlocked.CompareExchange(ref b.isRebeamRequestPending, 0, 1) == 1)
-							Volatile.Write(ref b.beamTiles, beamLoop(b));
-						else
-							Volatile.Write(ref b.beamTiles, null);
-
-						return true;
+						if (Interlocked.CompareExchange(ref b.isRebeamRequestPending, 0, 1) != 1)
+							return;
 					}
 					else await Task.Delay(cfg.BeamAwaitMS).ConfigureAwait(false);
 
@@ -411,18 +428,19 @@ namespace brays
 			{
 				trace(LogFlags.Exception, 0, "BeamLoop", ex.ToString());
 			}
-
-			return false;
+			finally
+			{
+				Interlocked.Decrement(ref b.isInBeamLoop);
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		void rebeam(Block b)
 		{
-			var req = Interlocked.CompareExchange(ref b.isRebeamRequestPending, 1, 0);
-			var bst = Volatile.Read(ref b.beamTiles);
+			Interlocked.CompareExchange(ref b.isRebeamRequestPending, 1, 0);
 
-			if (req == 0 && (bst == null || bst.Status == TaskStatus.RanToCompletion))
-				Volatile.Write(ref b.beamTiles, beamLoop(b));
+			if (Volatile.Read(ref b.isInBeamLoop) < 1)
+				beamLoop(b);
 		}
 
 		async Task<int> status(int blockID, int tilesCount, bool awaitRsp, MemoryFragment tileMap)
@@ -514,7 +532,8 @@ namespace brays
 			int dLen = 0,
 			int refid = 0,
 			int fid = 0,
-			Action<MemoryFragment> onTileXAwait = null)
+			Action<MemoryFragment> onTileXAwait = null,
+			int timeoutMS = -1)
 		{
 			// [i] The data could be null if CfgX request.
 
@@ -532,6 +551,7 @@ namespace brays
 			var len = dataLen + TILEX.HEADER;
 			var logop = ((LogFlags.Tile & cfg.Log.Flags) == LogFlags.Tile && cfg.Log.IsEnabled);
 			var rsp = 0;
+			var timeoutTicks = timeoutMS > 0 ? DateTime.Now.AddMilliseconds(timeoutMS).Ticks : 0;
 
 			if (onTileXAwait != null) tileXAwaits.TryAdd(fid, new TileXAwait(onTileXAwait));
 
@@ -556,6 +576,7 @@ namespace brays
 
 					for (int i = 0; i < cfg.SendRetries && !IsStopped; i++)
 					{
+						if (timeoutTicks > 0 && DateTime.Now.Ticks >= timeoutTicks) break;
 						if (lockOnGate.IsAcquired) lockOnRst.Wait();
 
 						var sent = socket.Send(frag, SocketFlags.None);
@@ -798,7 +819,7 @@ namespace brays
 			}
 			finally
 			{
-				// [i] Th Block and tileX procs use copies of the fragment.
+				// [i] The Block and tileX procs use copies of the fragment.
 				f.Dispose();
 			}
 		}
@@ -897,7 +918,7 @@ namespace brays
 
 			if (f.Data.Length > 0)
 			{
-				xf = tileXHigheay.AllocFragment(f.Data.Length);
+				xf = tileXHighway.AllocFragment(f.Data.Length);
 				f.Data.CopyTo(xf);
 			}
 
@@ -935,7 +956,7 @@ namespace brays
 
 					if (len == 0) break;
 
-					var pfr = tileXHigheay.AllocFragment(len);
+					var pfr = tileXHighway.AllocFragment(len);
 					var data = f.Data.Slice(pos + USH_LEN, len);
 
 					pfr.Span().Clear();
@@ -994,6 +1015,16 @@ namespace brays
 
 			if (b.IsComplete && Interlocked.CompareExchange(ref b.isOnCompleteTriggered, 1, 0) == 0)
 			{
+				Task.Run(async () =>
+				{
+					// Notify the sender that it's done
+					using (var mapFrag = outHighway.Alloc(b.tileMap.Bytes))
+					{
+						b.tileMap.WriteTo(mapFrag);
+						await status(b.ID, b.MarkedTiles, true, mapFrag);
+					}
+				});
+
 				if (logop) trace(LogFlags.ProcBlock, fid, $"B: {b.ID} completed.");
 				schedule(cfg.ScheduleCallbacksOn, b.Fragment);
 			}
@@ -1074,6 +1105,7 @@ namespace brays
 						{
 							if (logop) trace(LogFlags.ProcStatus, st.FrameID, $"Out B: {st.BlockID} completed.");
 							blocks.TryRemove(st.BlockID, out Block rem);
+							b.beamLoop.TrySetResult(true);
 							b.Dispose();
 						}
 						else
@@ -1246,7 +1278,7 @@ namespace brays
 				int c = 0;
 				var logop = (LogFlags.ReqTiles & cfg.Log.Flags) == LogFlags.ReqTiles && cfg.Log.IsEnabled;
 
-				while (!IsStopped && !b.IsComplete && !b.isFaulted && !b.isRejected)
+				while (!IsStopped && !b.isFaulted && !b.isRejected)
 				{
 					await Task.Delay(cfg.WaitAfterAllSentMS).ConfigureAwait(false);
 
@@ -1257,8 +1289,9 @@ namespace brays
 						using (var frag = outHighway.Alloc(b.tileMap.Bytes))
 						{
 							b.tileMap.WriteTo(frag);
-							status(b.ID, b.MarkedTiles, false, frag);
+							await status(b.ID, b.MarkedTiles, false, frag);
 						}
+						if (b.IsComplete) break;
 					}
 				}
 
@@ -1439,7 +1472,7 @@ namespace brays
 		Func<MemoryFragment, Task> onReceiveAsync;
 		HeapHighway outHighway;
 		IMemoryHighway blockHighway;
-		IMemoryHighway tileXHigheay;
+		IMemoryHighway tileXHighway;
 		BeamerCfg cfg;
 		IPEndPoint target;
 		IPEndPoint source;

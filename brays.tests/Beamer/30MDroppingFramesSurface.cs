@@ -141,7 +141,7 @@ namespace brays.tests
 									f[i] = 43;
 
 								f.Write(len, 0);
-								rayA.Beam(f).Wait();
+								rayA.Beam(f);
 
 								var fo = Interlocked.Increment(ref totalFragsOut);
 								var ts = Interlocked.Add(ref totalSend, len);

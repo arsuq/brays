@@ -22,6 +22,7 @@ namespace brays
 			if (TotalSize > tileSize && frag.Length % tileSize != 0) TilesCount++;
 			if (TilesCount == 0) TilesCount = 1;
 
+			beamLoop = new TaskCompletionSource<bool>();
 			tileMap = new BitMask(TilesCount);
 		}
 
@@ -142,9 +143,9 @@ namespace brays
 		internal int isOnCompleteTriggered;
 		internal int isRebeamRequestPending;
 
+		internal TaskCompletionSource<bool> beamLoop;
 		internal Task requestTiles;
-		internal Task<bool> beamTiles;
-
+		internal int isInBeamLoop;
 		internal byte[] frameHeader = new byte[FRAME.HEADER];
 
 		int markedTiles;

@@ -14,7 +14,7 @@ namespace brays.tests
 		public string FailureMessage { get; private set; }
 		public bool? Passed { get; private set; }
 		public bool IsComplete { get; private set; }
-		public bool IndependentLaunchOnly => false;
+		public bool IndependentLaunchOnly => true;
 
 		public async Task Start(IDictionary<string, List<string>> args)
 		{
@@ -66,8 +66,8 @@ namespace brays.tests
 					}
 					finally
 					{
-						$"Signal {rst.CurrentCount}".AsInnerInfo();
 						rst.Signal();
+						$"Signal {rst.CurrentCount}".AsInnerInfo();
 					}
 				}
 
@@ -90,25 +90,29 @@ namespace brays.tests
 					await rayA.TargetIsActive();
 					using (var hw = new HeapHighway())
 					{
-						Parallel.For(0, TOTAL_SENDS, async (i) =>
+						Parallel.For(0, TOTAL_SENDS, (i) =>
 						{
-							if (rayA.IsStopped) return;
-							var len = rdmSize.Next(MIN_SIZE, MAX_SIZE);
-							using (var f = hw.Alloc(len))
+							try
 							{
-								for (int j = 0; j < len; j++)
-									f[j] = (byte)i;
+								if (rayA.IsStopped) return;
+								var len = rdmSize.Next(MIN_SIZE, MAX_SIZE);
 
-								f.Write(len, 0);
-
-								if (!await rayA.Beam(f))
+								using (var f = hw.Alloc(len))
 								{
-									"Failed to beam".AsError();
-								}
-							}
+									for (int j = 0; j < len; j++)
+										f[j] = (byte)i;
 
-							smask[i] = true;
-							$"Lanes :{hw.GetLanesCount()} i:{i}".AsInfo();
+									f.Write(len, 0);
+									if (!rayA.Beam(f).Result) "Failed to beam".AsError();
+								}
+
+								smask[i] = true;
+								if (!hw.IsDisposed) $"Lanes :{hw.GetLanesCount()} i:{i}".AsInfo();
+							}
+							catch (Exception ex)
+							{
+								ex.ToString().AsError();
+							}
 						});
 					}
 

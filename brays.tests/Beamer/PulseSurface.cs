@@ -19,7 +19,7 @@ namespace brays.tests
 		{
 			var targ = new TestArgs(args);
 
-			await WithCheck(targ);
+			//await WithCheck(targ);
 			await NoCheck(targ);
 
 			if (!Passed.HasValue)
@@ -56,7 +56,7 @@ namespace brays.tests
 						UseTCP = targ.UseTCP,
 						EnablePulsing = true,
 						PulseRetentionMS = 0,
-						Log = new BeamerLogCfg("rayA-Pulse", targ.Log)
+						Log = new BeamerLogCfg("rayA-PulseWithCheck", targ.Log)
 					});
 
 				rayB = new Beamer((f) =>
@@ -97,7 +97,7 @@ namespace brays.tests
 				}, new BeamerCfg()
 				{
 					UseTCP = targ.UseTCP,
-					Log = new BeamerLogCfg("rayB-Pulse", targ.Log)
+					Log = new BeamerLogCfg("rayB-PulseWithCheck", targ.Log)
 				});
 
 				using (var hw = new HeapHighway())
@@ -185,7 +185,7 @@ namespace brays.tests
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
 					EnablePulsing = true,
-					Log = new BeamerLogCfg("rayA", targ.Log)
+					Log = new BeamerLogCfg("rayA-PulseNoCheck", targ.Log)
 				});
 
 				rayB = new Beamer((f) =>
@@ -208,7 +208,7 @@ namespace brays.tests
 						if (f != null) f.Dispose();
 					}
 
-				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB", targ.Log) });
+				}, new BeamerCfg() { Log = new BeamerLogCfg("rayB-PulseNoCheck", targ.Log) });
 
 				var hw = new HeapHighway();
 				var ta = new Task(async () =>
