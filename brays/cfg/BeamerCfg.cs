@@ -189,7 +189,7 @@ namespace brays
 		/// </summary>
 		public CallbackThread ScheduleCallbacksOn = CallbackThread.Task;
 
-#if DEBUG
+#if DEBUG || ASSERT
 		internal bool dropFrame()
 		{
 			if (!dropFrames || UseTCP) return false;

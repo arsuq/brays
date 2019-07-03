@@ -19,7 +19,7 @@ namespace brays.tests
 
 		public async Task Start(IDictionary<string, List<string>> args)
 		{
-#if !DEBUG
+#if !DEBUG && !ASSERT
 			return;
 #endif
 
@@ -48,7 +48,7 @@ namespace brays.tests
 				 {
 					 UseTCP = ta.UseTCP,
 					 Log = new BeamerLogCfg("a-DroppedTiles", ta.Log)
-#if DEBUG
+#if DEBUG || ASSERT
 					 ,dropFrames = true,
 					 deopFramePercent = 20
 #endif
@@ -61,8 +61,8 @@ namespace brays.tests
 				 {
 					 UseTCP = ta.UseTCP,
 					 Log = new BeamerLogCfg("b-DroppedTiles", ta.Log)
-#if DEBUG
-					 ,dropFrames = true,
+#if DEBUG || ASSERT
+					 , dropFrames = true,
 					 deopFramePercent = 20
 #endif
 				 },

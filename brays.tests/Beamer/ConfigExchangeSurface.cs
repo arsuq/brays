@@ -16,7 +16,7 @@ namespace brays.tests
 
 		public async Task Start(IDictionary<string, List<string>> args)
 		{
-#if !DEBUG
+#if !DEBUG && !ASSERT
 			return;
 #endif
 			Beamer rayA = null;

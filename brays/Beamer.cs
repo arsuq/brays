@@ -846,7 +846,7 @@ namespace brays
 		void procCfgReq(MemoryFragment frag)
 		{
 			var f = new TILEX(frag.Span());
-#if DEBUG
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -866,7 +866,7 @@ namespace brays
 		void procCfgX(MemoryFragment frag)
 		{
 			var f = new TILEX(frag.Span());
-#if DEBUG
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -894,7 +894,16 @@ namespace brays
 		void procTileX(MemoryFragment frag)
 		{
 			var f = new TILEX(frag.Span());
-#if DEBUG
+
+#if ASSERT
+			var at = f.Length + TILEX.HEADER;
+			var f2 = new TILEX(frag.Span().Slice(at));
+
+			if (f2.Kind == (byte)Lead.Tile && Math.Abs(f2.FrameID - f.FrameID) < 100)
+				throw new Exception("Multiple frames received.");
+#endif
+
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -931,7 +940,7 @@ namespace brays
 		{
 			var f = new TILEX(frag.Span());
 
-#if DEBUG
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -984,7 +993,7 @@ namespace brays
 				throw new Exception("Multiple frames received.");
 #endif
 
-#if DEBUG
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -1033,7 +1042,7 @@ namespace brays
 		void procError(MemoryFragment frag)
 		{
 			var sg = new SIGNAL(frag.Span());
-#if DEBUG
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -1070,7 +1079,7 @@ namespace brays
 		void procStatus(MemoryFragment frag)
 		{
 			var st = new STATUS(frag.Span());
-#if DEBUG
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -1129,7 +1138,7 @@ namespace brays
 		{
 			var sg = new SIGNAL(frag.Span());
 
-#if DEBUG
+#if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{
 				if (((LogFlags.DropFrame & cfg.Log.Flags) == LogFlags.DropFrame && cfg.Log.IsEnabled))
@@ -1438,7 +1447,7 @@ namespace brays
 				case LogFlags.ProcPulse:
 				ttl = string.Format("{0,11}:i {1, -12} {2}", frame, op, title);
 				break;
-#if DEBUG
+#if DEBUG || ASSERT
 				case LogFlags.DropFrame:
 				ttl = string.Format("{0,11}:i {1, -12} {2}", frame, op, title);
 				break;
