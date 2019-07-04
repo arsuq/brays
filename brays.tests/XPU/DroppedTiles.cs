@@ -46,7 +46,6 @@ namespace brays.tests
 			var a = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {
-					 UseTCP = ta.UseTCP,
 					 Log = new BeamerLogCfg("a-DroppedTiles", ta.Log)
 #if DEBUG || ASSERT
 					 ,dropFrames = true,
@@ -59,7 +58,6 @@ namespace brays.tests
 			var b = new XPU(new XCfg(
 				 new BeamerCfg()
 				 {
-					 UseTCP = ta.UseTCP,
 					 Log = new BeamerLogCfg("b-DroppedTiles", ta.Log)
 #if DEBUG || ASSERT
 					 , dropFrames = true,

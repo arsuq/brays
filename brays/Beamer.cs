@@ -138,21 +138,9 @@ namespace brays
 					this.target = target;
 
 					if (socket != null) socket.Dispose();
-
-					if (cfg.UseTCP)
-					{
-						socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-						socket.Bind(this.source);
-						if (!await tcpConnect(
-							(int)cfg.TCPConnectTimeout.TotalMilliseconds,
-							cfg.TCPConnectRetryDelayMS)) return false;
-					}
-					else
-					{
-						socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-						socket.Bind(this.source);
-						socket.Connect(target);
-					}
+					socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+					socket.Bind(this.source);
+					socket.Connect(target);
 
 					socket.ReceiveBufferSize = cfg.ReceiveBufferSize;
 					socket.SendBufferSize = cfg.SendBufferSize;
@@ -557,7 +545,7 @@ namespace brays
 
 			// [i] If TCP no need of SignalAwait  
 
-			if (cfg.UseTCP || signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
+			if (signalAwaits.TryAdd(fid, new SignalAwait((mark) =>
 				{
 					Volatile.Write(ref rsp, mark);
 					rst.Set(true);
@@ -584,12 +572,6 @@ namespace brays
 						if (logop)
 							if (sent == frag.Length) trace(LogFlags.Tile, fid, $"K: {(Lead)kind} b:{sent} #{i + 1}");
 							else trace(LogFlags.Tile, fid, $"Failed K: {(Lead)kind}");
-
-						if (cfg.UseTCP && sent > 0)
-						{
-							rsp = (int)SignalKind.ACK;
-							rst.Set(1, false);
-						}
 
 						if (await rst.Wait(awaitMS) > 0) break;
 						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
@@ -665,10 +647,10 @@ namespace brays
 					try
 					{
 #if ASSERT
-						if (!ASSERT_packTile()) throw new Exception("Corrupt pulse tile.");
+				if (!ASSERT_packTile()) throw new Exception("Corrupt pulse tile.");
 #endif
-						mark = await tilex((byte)Lead.Pulse, packTile, reloadCopyRst, 0, x.len)
-							.ConfigureAwait(false);
+				mark = await tilex((byte)Lead.Pulse, packTile, reloadCopyRst, 0, x.len)
+			.ConfigureAwait(false);
 					}
 					catch (AggregateException aex)
 					{
@@ -1026,8 +1008,8 @@ namespace brays
 			{
 				Task.Run(async () =>
 				{
-					// Notify the sender that it's done
-					using (var mapFrag = outHighway.Alloc(b.tileMap.Bytes))
+			// Notify the sender that it's done
+			using (var mapFrag = outHighway.Alloc(b.tileMap.Bytes))
 					{
 						b.tileMap.WriteTo(mapFrag);
 						await status(b.ID, b.MarkedTiles, true, mapFrag);
@@ -1344,30 +1326,6 @@ namespace brays
 			}
 
 			trace(LogFlags.AutoPulse, 0, "Not pulsing");
-		}
-
-		Task<bool> tcpConnect(int timeoutMS, int attemptDelayMS)
-		{
-			var t = new TaskCompletionSource<bool>();
-
-			if (timeoutMS > 0) Task.Delay(timeoutMS).ContinueWith((_) => t.TrySetResult(false));
-
-			Task.Run(async () =>
-			{
-				while (!t.Task.IsCompleted)
-				{
-					try
-					{
-						await Task.Delay(attemptDelayMS);
-						socket.Connect(target);
-						t.TrySetResult(true);
-						break;
-					}
-					catch { }
-				}
-			});
-
-			return t.Task;
 		}
 
 		void schedule(CallbackThread cbt, MemoryFragment f, bool disposeOnEx = true)

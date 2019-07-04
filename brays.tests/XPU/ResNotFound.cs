@@ -23,12 +23,12 @@ namespace brays.tests
 			var t = ta.BE;
 
 			var a = new XPU(new XCfg(
-				 new BeamerCfg() { UseTCP = ta.UseTCP, Log = new BeamerLogCfg("a", ta.Log) },
+				 new BeamerCfg() {  Log = new BeamerLogCfg("a", ta.Log) },
 				 new XLogCfg("a-ResNotFound", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 
 			var b = new XPU(new XCfg(
-				 new BeamerCfg() { UseTCP = ta.UseTCP, Log = new BeamerLogCfg("b", ta.Log) },
+				 new BeamerCfg() { Log = new BeamerLogCfg("b", ta.Log) },
 				 new XLogCfg("b-ResNotFound", ta.Log),
 				 new HeapHighway(ushort.MaxValue)));
 

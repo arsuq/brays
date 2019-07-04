@@ -74,13 +74,11 @@ namespace brays.tests
 				rayA = new Beamer((f) => { },
 					new BeamerCfg()
 					{
-						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayA-ConcurrentBeams", targ.Log) { OnTrace = null },
 					});
 
 				rayB = new Beamer((f) => receive(f), new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB-ConcurrentBeams", targ.Log) { OnTrace = null },
 				});
 

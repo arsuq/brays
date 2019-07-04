@@ -36,7 +36,6 @@ namespace brays.tests
 					(f) => { },
 					new BeamerCfg()
 					{
-						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayA-DroppingFrames", targ.Log),
 #if DEBUG || ASSERT
 						dropFrames = true,
@@ -74,7 +73,6 @@ namespace brays.tests
 					}
 				}, new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB-DroppingFrames", targ.Log),
 #if DEBUG || ASSERT
 					dropFrames = true,

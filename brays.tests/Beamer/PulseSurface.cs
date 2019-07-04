@@ -53,7 +53,6 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
-						UseTCP = targ.UseTCP,
 						EnablePulsing = true,
 						PulseRetentionMS = 0,
 						Log = new BeamerLogCfg("rayA-PulseWithCheck", targ.Log)
@@ -96,7 +95,6 @@ namespace brays.tests
 
 				}, new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB-PulseWithCheck", targ.Log)
 				});
 

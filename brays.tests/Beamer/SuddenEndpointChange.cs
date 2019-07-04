@@ -66,7 +66,6 @@ namespace brays.tests
 					rayA = new Beamer((f) => { },
 					new BeamerCfg()
 					{
-						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayA-EndpointChange", targ.Log),
 #if DEBUG || ASSERT
 						dropFrames = true,
@@ -77,7 +76,6 @@ namespace brays.tests
 				if (targ.B)
 					rayB = new Beamer(receive, new BeamerCfg()
 					{
-						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayB-EndpointChange", targ.Log),
 #if DEBUG || ASSERT
 						dropFrames = true,

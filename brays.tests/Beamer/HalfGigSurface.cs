@@ -97,12 +97,10 @@ namespace brays.tests
 
 				rayA = new Beamer((f) => { }, new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					TileSizeBytes = 60000
 				});
 				rayB = new Beamer(receive, new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB-HalfGig", targ.Log, traceops),
 					TileSizeBytes = 60000
 				});

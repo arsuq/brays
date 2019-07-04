@@ -34,7 +34,6 @@ namespace brays.tests
 					(f) => { Console.WriteLine("?"); },
 					new BeamerCfg()
 					{
-						UseTCP = targ.UseTCP,
 						Log = new BeamerLogCfg("rayA-OneMeg", targ.Log)
 					});
 				rayB = new Beamer((f) =>
@@ -68,7 +67,6 @@ namespace brays.tests
 					}
 				}, new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					Log = new BeamerLogCfg("rayB-OneMeg", targ.Log)
 				});
 

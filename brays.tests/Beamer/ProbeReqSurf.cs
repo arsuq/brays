@@ -29,14 +29,12 @@ namespace brays.tests
 
 				a = new Beamer((_) => { }, new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					EnableProbes = true,
 					ProbeFreqMS = 400
 				});
 
 				b = new Beamer((_) => { }, new BeamerCfg()
 				{
-					UseTCP = targ.UseTCP,
 					EnableProbes = true,
 					ProbeFreqMS = 100
 				});
