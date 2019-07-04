@@ -19,11 +19,21 @@ namespace brays
 	/// </summary>
 	public class Beamer : IDisposable
 	{
+		/// <summary>
+		/// Wires the config, but does not create the socket. 
+		/// </summary>
+		/// <param name="onReceive">The consumer's handler.</param>
+		/// <param name="cfg">The beamer configuration</param>
 		public Beamer(Action<MemoryFragment> onReceive, BeamerCfg cfg) : this(cfg)
 		{
 			this.onReceive = onReceive ?? throw new ArgumentNullException("onReceive");
 		}
 
+		/// <summary>
+		/// Wires the config, but does not create the socket. 
+		/// </summary>
+		/// <param name="onReceive">The consumer's handler.</param>
+		/// <param name="cfg">The beamer configuration</param>
 		public Beamer(Func<MemoryFragment, Task> onReceiveAsync, BeamerCfg cfg) : this(cfg)
 		{
 			this.onReceiveAsync = onReceiveAsync ?? throw new ArgumentNullException("onReceiveAsync");
@@ -35,7 +45,7 @@ namespace brays
 
 			ID = Guid.NewGuid();
 			this.cfg = cfg;
-			outHighway = new HeapHighway(new HighwaySettings(UDP_MAX), UDP_MAX, UDP_MAX, UDP_MAX);
+			outHighway = cfg.OutHighway;
 			blockHighway = cfg.ReceiveHighway;
 			tileXHighway = cfg.TileExchangeHighway;
 
@@ -46,7 +56,7 @@ namespace brays
 		}
 
 		/// <summary>
-		/// Can be called concurrently.
+		/// Disposes all highways and the socket. Can be called concurrently.
 		/// </summary>
 		public void Dispose()
 		{
@@ -229,7 +239,7 @@ namespace brays
 		public ResetEvent Pulse(Span<byte> data) => pack(data);
 
 		/// <summary>
-		/// Sends the fragment to the target beamer in TotalReBeamsCount retries, awaiting BeamAwaitMS on failure.
+		/// Sends the fragment to the target beamer in BeamRetriesCount retries, awaiting BeamAwaitMS on failure.
 		/// </summary>
 		/// <param name="f">The data to transfer.</param>
 		/// <param name="timeoutMS">By default is infinite (-1).</param>
@@ -336,24 +346,14 @@ namespace brays
 
 							sentBytes = socket.Send(b.Fragment.Span().Slice(leftpos, dgramLen));
 						}
-						else
-						{
-							try
+						else using (var mf = outHighway.AllocFragment(dgramLen))
 							{
+								FRAME.Make(fid, b.ID, b.TotalSize, i,
+									(ushort)(dgramLen - FRAME.HEADER), 0,
+									b.Fragment.Span().Slice(0, dgramLen - FRAME.HEADER), mf);
 
-								using (var mf = outHighway.Alloc(dgramLen))
-								{
-									FRAME.Make(fid, b.ID, b.TotalSize, i,
-										(ushort)(dgramLen - FRAME.HEADER), 0,
-										b.Fragment.Span().Slice(0, dgramLen - FRAME.HEADER), mf);
-
-									sentBytes = socket.Send(mf);
-								}
+								sentBytes = socket.Send(mf);
 							}
-							catch (Exception ex)
-							{
-							}
-						}
 
 						var logop = ((LogFlags.Beam & cfg.Log.Flags) == LogFlags.Beam && cfg.Log.IsEnabled);
 
@@ -398,13 +398,19 @@ namespace brays
 
 			try
 			{
-				for (int i = 0; i < cfg.TotalReBeamsCount; i++)
+				var awaitMS = cfg.BeamRetryDelayStartMS;
+
+				for (int i = 0; i < cfg.BeamRetriesCount; i++)
 					if (await beam(b).ConfigureAwait(false) == (int)SignalKind.ACK)
 					{
 						if (Interlocked.CompareExchange(ref b.isRebeamRequestPending, 0, 1) != 1)
 							return;
 					}
-					else await Task.Delay(cfg.BeamAwaitMS).ConfigureAwait(false);
+					else
+					{
+						awaitMS = (int)(awaitMS * cfg.RetryDelayStepMultiplier);
+						await Task.Delay(awaitMS).ConfigureAwait(false);
+					}
 
 				b.Dispose();
 			}
@@ -445,7 +451,7 @@ namespace brays
 
 				if (awaitRsp) rst = new ResetEvent();
 
-				using (var frag = outHighway.Alloc(len))
+				using (var frag = outHighway.AllocFragment(len))
 				{
 					STATUS.Make(fid, blockID, tilesCount,
 						tileMap != null ? tileMap.Span() : default,
@@ -551,7 +557,7 @@ namespace brays
 					rst.Set(true);
 				})))
 			{
-				using (var frag = outHighway.Alloc(len))
+				using (var frag = outHighway.AllocFragment(len))
 				{
 					if (dataLen > 0)
 						TILEX.Make(kind, fid, refid, (ushort)dataLen, data.Span().Slice(dfrom, dLen), frag);
@@ -594,7 +600,7 @@ namespace brays
 
 			if (onTileXAwait != null) tileXAwaits.TryAdd(fid, new TileXAwait(onTileXAwait));
 
-			using (var frag = outHighway.Alloc(len))
+			using (var frag = outHighway.AllocFragment(len))
 			{
 				var tilex = new TILEX(kind, fid, refid, 0, data);
 
@@ -617,7 +623,7 @@ namespace brays
 
 			lock (packLock)
 			{
-				if (packTile == null) packTile = outHighway.Alloc(cfg.TileSizeBytes);
+				if (packTile == null) packTile = outHighway.AllocFragment(cfg.TileSizeBytes);
 				if (packTileOffset + USH_LEN + s.Length >= cfg.TileSizeBytes) pulseAndReload();
 
 				if (BitConverter.TryWriteBytes(packTile.Span().Slice(packTileOffset), (ushort)s.Length))
@@ -649,8 +655,8 @@ namespace brays
 #if ASSERT
 				if (!ASSERT_packTile()) throw new Exception("Corrupt pulse tile.");
 #endif
-				mark = await tilex((byte)Lead.Pulse, packTile, reloadCopyRst, 0, x.len)
-			.ConfigureAwait(false);
+						mark = await tilex((byte)Lead.Pulse, packTile, reloadCopyRst, 0, x.len)
+					.ConfigureAwait(false);
 					}
 					catch (AggregateException aex)
 					{
@@ -665,7 +671,7 @@ namespace brays
 				// Reload
 				reloadCopyRst.Wait();
 				packTile.Dispose();
-				packTile = outHighway.Alloc(cfg.TileSizeBytes);
+				packTile = outHighway.AllocFragment(cfg.TileSizeBytes);
 				packTile.Span().Clear();
 				packTileOffset = 0;
 			}
@@ -710,7 +716,7 @@ namespace brays
 				{
 					var cfgx = new CfgX(cfg, source);
 
-					sf = outHighway.Alloc(CfgX.LENGTH);
+					sf = outHighway.AllocFragment(CfgX.LENGTH);
 					cfgx.Write(sf);
 				}
 				else rst = new ResetEvent();
@@ -1008,8 +1014,8 @@ namespace brays
 			{
 				Task.Run(async () =>
 				{
-			// Notify the sender that it's done
-			using (var mapFrag = outHighway.Alloc(b.tileMap.Bytes))
+					// Notify the sender that it's done
+					using (var mapFrag = outHighway.AllocFragment(b.tileMap.Bytes))
 					{
 						b.tileMap.WriteTo(mapFrag);
 						await status(b.ID, b.MarkedTiles, true, mapFrag);
@@ -1277,7 +1283,7 @@ namespace brays
 					{
 						if (logop) trace(LogFlags.ReqTiles, 0, $"B: {b.ID} MT: {b.MarkedTiles}/{b.TilesCount} #{c++}");
 
-						using (var frag = outHighway.Alloc(b.tileMap.Bytes))
+						using (var frag = outHighway.AllocFragment(b.tileMap.Bytes))
 						{
 							b.tileMap.WriteTo(frag);
 							await status(b.ID, b.MarkedTiles, false, frag);
@@ -1437,7 +1443,7 @@ namespace brays
 		CancellationTokenSource cancel;
 		Action<MemoryFragment> onReceive;
 		Func<MemoryFragment, Task> onReceiveAsync;
-		HeapHighway outHighway;
+		IMemoryHighway outHighway;
 		IMemoryHighway blockHighway;
 		IMemoryHighway tileXHighway;
 		BeamerCfg cfg;

@@ -14,11 +14,21 @@ namespace brays
 		/// <param name="receiveHighway">For the blocks, i.e. do not assume lengths.</param>
 		/// <param name="tileXHighway">For tile exchanges. Pass null to init with a heap hw with 65K lanes.</param>
 		/// <param name="logcfg">The logging settings.</param>
-		public BeamerCfg(IMemoryHighway receiveHighway = null, IMemoryHighway tileXHighway = null, BeamerLogCfg logcfg = null)
+		public BeamerCfg(
+			IMemoryHighway receiveHighway = null,
+			IMemoryHighway tileXHighway = null,
+			IMemoryHighway outHighway = null,
+			BeamerLogCfg logcfg = null)
 		{
 			ReceiveHighway = receiveHighway != null ? receiveHighway : new HeapHighway();
 			TileExchangeHighway = tileXHighway != null ?
 				tileXHighway :
+				new HeapHighway(
+					new HighwaySettings(ushort.MaxValue, 10000),
+					ushort.MaxValue, ushort.MaxValue, ushort.MaxValue);
+
+			OutHighway = outHighway != null ?
+				outHighway :
 				new HeapHighway(
 					new HighwaySettings(ushort.MaxValue, 10000),
 					ushort.MaxValue, ushort.MaxValue, ushort.MaxValue);
@@ -93,17 +103,19 @@ namespace brays
 		public int ErrorAwaitMS = 3000;
 
 		/// <summary>
-		/// After this number of receive 0 bytes retries the Beamer shuts down.
+		/// After receiving this number of 0-bytes, the Beamer shuts down.
+		/// The failed receives are separated by ErrorAwaitMS.
 		/// </summary>
 		public int MaxReceiveRetries = 8;
 
 		/// <summary>
-		/// The number of unconfirmed status dgram sends before bailing the corresponding operation. 
+		/// The number of unconfirmed status dgram sends before bailing the ongoing operation. 
 		/// </summary>
 		public int SendRetries = 40;
 
 		/// <summary>
-		/// The SendRetries starting loop await in milliseconds. 
+		/// The SendRetries loop starting await value in milliseconds. 
+		/// Each subsequent failure multiplies the await by RetryDelayStepMultiplier.
 		/// </summary>
 		public int RetryDelayStartMS = 100;
 
@@ -119,14 +131,15 @@ namespace brays
 		public int CleanupFreqMS = 8000;
 
 		/// <summary>
-		/// The delay in the Beam() loop.
+		/// The starting retry delay in the Beam() loop in milliseconds.
+		/// Each subsequent failure multiplies the await by RetryDelayStepMultiplier.
 		/// </summary>
-		public int BeamAwaitMS = 1200;
+		public int BeamRetryDelayStartMS = 2000;
 
 		/// <summary>
 		/// Beam() is invoked in a loop up to this number of times or until a status is received.
 		/// </summary>
-		public int TotalReBeamsCount = 3;
+		public int BeamRetriesCount = 3;
 
 		/// <summary>
 		/// A set of received frame IDs is kept for protecting against double processing.
@@ -141,6 +154,7 @@ namespace brays
 		/// <summary>
 		/// All sent blocks are deleted this amount of time after being sent.
 		/// Re-beams offsets the sent time.
+		/// Note that the blocks may be disposed long before the cleanup.
 		/// </summary>
 		public TimeSpan SentBlockRetention = new TimeSpan(0, 5, 0);
 
@@ -158,6 +172,11 @@ namespace brays
 		/// so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
 		/// </remarks>
 		public int WaitAfterAllSentMS = 1000;
+
+		/// <summary>
+		/// Where the dgrams are composed.
+		/// </summary>
+		public IMemoryHighway OutHighway;
 
 		/// <summary>
 		/// Where the blocks are assembled.
