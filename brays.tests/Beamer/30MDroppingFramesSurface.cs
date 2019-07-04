@@ -127,8 +127,7 @@ namespace brays.tests
 					{
 						var ta = new Task(async () =>
 						{
-							await rayA.LockOn(aep, bep);
-							await rayA.TargetIsActive();
+							await rayA.LockOn(aep, bep, -1);
 
 							while (!rayA.IsStopped)
 							{
@@ -157,7 +156,7 @@ namespace brays.tests
 
 					if (targ.B)
 					{
-						if (! await rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
+						if (!rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
 					}
 
 					if (!rst.WaitOne(new TimeSpan(0, 2, 0)))

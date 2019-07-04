@@ -39,11 +39,10 @@ namespace brays.tests
 					ProbeFreqMS = 100
 				});
 
-				var ac = a.LockOn(s, t);
-				var bc = b.LockOn(t, s);
+				a.LockOn(s, t);
+				b.LockOn(t, s);
 
 				await Task.Delay(2000);
-				Task.WaitAll(ac, bc);
 
 				var ap = DateTime.Now.Subtract(b.LastProbe).TotalMilliseconds;
 				var bp = DateTime.Now.Subtract(a.LastProbe).TotalMilliseconds;

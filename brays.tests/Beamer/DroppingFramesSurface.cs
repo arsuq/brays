@@ -82,7 +82,7 @@ namespace brays.tests
 
 				using (var hw = new HeapHighway())
 				{
-					if (await rayB.LockOn(bep, aep) && await rayA.LockOn(aep, bep) && await rayA.TargetIsActive())
+					if ( rayB.LockOn(bep, aep) && rayA.LockOn(aep, bep) && await rayA.TargetIsActive())
 					{
 						var f = hw.Alloc(MEG);
 

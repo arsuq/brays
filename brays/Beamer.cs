@@ -115,14 +115,14 @@ namespace brays
 		}
 
 		/// <summary>
-		/// Creates a new socket, starts all listening, cleanup and pulsing tasks. 
+		/// Creates a new socket, starts the listening, cleanup and pulsing tasks. 
 		/// If invoked concurrently only the first call will enter, the rest will 
 		/// return false immediately.
 		/// </summary>
 		/// <param name="listen">The local endpoint.</param>
 		/// <param name="target">The remote endpoint.</param>
 		/// <returns>True on success.</returns>
-		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target)
+		public bool LockOn(IPEndPoint listen, IPEndPoint target)
 		{
 			var r = false;
 
@@ -191,7 +191,7 @@ namespace brays
 		/// <returns>False if either LockOn or TargetIsActive return false.</returns>
 		public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS)
 		{
-			if (await LockOn(listen, target))
+			if (LockOn(listen, target))
 				return await TargetIsActive(awaitMS);
 
 			return false;
@@ -1153,7 +1153,7 @@ namespace brays
 				var maxccBeams = targetCfg.ReceiveBufferSize / targetCfg.TileSizeBytes;
 				if (maxccBeams < cfg.MaxBeamedTilesAtOnce) cfg.MaxBeamedTilesAtOnce = maxccBeams;
 
-				if (!Source.Equals(target)) LockOn(source, tep).Wait();
+				if (!Source.Equals(target)) LockOn(source, tep);
 			}
 		}
 

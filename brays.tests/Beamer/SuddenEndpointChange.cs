@@ -19,9 +19,12 @@ namespace brays.tests
 
 		public async Task Start(IDictionary<string, List<string>> args)
 		{
+
 #if !DEBUG && !ASSERT
 			return;
 #endif
+
+			await Task.Yield();
 
 			Beamer rayA = null;
 			Beamer rayB = null;
@@ -103,7 +106,7 @@ namespace brays.tests
 								}
 								else
 								{
-									if (await rayA.LockOn(rayA.Source, rayA.Target))
+									if (rayA.LockOn(rayA.Source, rayA.Target))
 										$"The beamer locked on {rayA.Source.ToString()}".AsInfo();
 									else
 									{
@@ -135,7 +138,7 @@ namespace brays.tests
 
 				if (targ.B)
 				{
-					if (! await rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
+					if (!rayB.LockOn(bep, aep)) $"Failed to lock on rayA".AsError();
 				}
 
 				if (!rst.WaitOne(new TimeSpan(0, 1, 0)))

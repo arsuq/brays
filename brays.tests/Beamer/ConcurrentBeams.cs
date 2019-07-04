@@ -84,8 +84,8 @@ namespace brays.tests
 
 				var ta = new Task(async () =>
 				{
-					await rayA.LockOn(targ.AE, targ.BE);
-					await rayA.TargetIsActive();
+					await rayA.LockOn(targ.AE, targ.BE, -1);
+
 					using (var hw = new HeapHighway())
 					{
 						Parallel.For(0, TOTAL_SENDS, (i) =>
@@ -119,7 +119,7 @@ namespace brays.tests
 
 				ta.Start();
 
-				if (!await rayB.LockOn(targ.BE, targ.AE)) $"Failed to lock on rayA".AsError();
+				if (!rayB.LockOn(targ.BE, targ.AE)) $"Failed to lock on rayA".AsError();
 
 				if (!rst.Wait(new TimeSpan(0, 4, 0)))
 				{
