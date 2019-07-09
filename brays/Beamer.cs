@@ -1030,6 +1030,7 @@ namespace brays
 		void procError(MemoryFragment frag)
 		{
 			var sg = new SIGNAL(frag.Span());
+
 #if DEBUG || ASSERT
 			if (cfg.dropFrame())
 			{

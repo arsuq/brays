@@ -59,7 +59,22 @@ namespace brays
 		public bool Start(IPEndPoint listen, IPEndPoint target) =>
 			 beamer.LockOn(listen, target);
 
-		public Task<bool> TargetIsActive(int timeout = -1) => beamer.TargetIsActive(timeout);
+		/// <summary>
+		/// Locks on the target endpoint and awaits the target to become active.
+		/// </summary>
+		/// <param name="listen">The local endpoint</param>
+		/// <param name="target">The remote endpoint</param>
+		/// <param name="awaitMS">The beamer's TargetIsActive() timeout.</param>
+		/// <returns>True if succeeds</returns>
+		public Task<bool> Start(IPEndPoint listen, IPEndPoint target, int awaitMS) =>
+			 beamer.LockOn(listen, target, awaitMS);
+
+		/// <summary>
+		/// Requests and awaits for a probe to arrive.
+		/// </summary>
+		/// <param name="awaitMS">The timeout.</param>
+		/// <returns></returns>
+		public Task<bool> TargetIsActive(int awaitMS = -1) => beamer.TargetIsActive(awaitMS);
 
 		public Task<Exchange> Request(Exchange ox, TimeSpan timeout = default)
 		{

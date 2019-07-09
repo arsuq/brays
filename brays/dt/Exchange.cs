@@ -8,6 +8,8 @@ using System.Threading;
 
 namespace brays
 {
+	// [!] Magic numbers ahead
+
 	public class Exchange : IDisposable
 	{
 		internal Exchange(XPU xpu, MemoryFragment f, bool isCopy = false)
