@@ -1,0 +1,502 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>brays</name>
+    </assembly>
+    <members>
+        <member name="T:brays.Beamer">
+            <summary>
+            A socket.
+            </summary>
+        </member>
+        <member name="M:brays.Beamer.#ctor(System.Action{System.MemoryFragment},brays.BeamerCfg)">
+            <summary>
+            Wires the config, but does not create the socket. 
+            </summary>
+            <param name="onReceive">The consumer's handler.</param>
+            <param name="cfg">The beamer configuration</param>
+        </member>
+        <member name="M:brays.Beamer.#ctor(System.Func{System.MemoryFragment,System.Threading.Tasks.Task},brays.BeamerCfg)">
+            <summary>
+            Wires the config, but does not create the socket. 
+            </summary>
+            <param name="onReceive">The consumer's handler.</param>
+            <param name="cfg">The beamer configuration</param>
+        </member>
+        <member name="M:brays.Beamer.Dispose">
+            <summary>
+            Disposes all highways and the socket. Can be called concurrently.
+            </summary>
+        </member>
+        <member name="M:brays.Beamer.Probe(System.Int32)">
+            <summary>
+            Sends a probe request and awaits for a probe reply.
+            </summary>
+            <param name="awaitMS">The default is 2 sec.</param>
+            <returns>False if no response was received within the awaitMS time interval.</returns>
+        </member>
+        <member name="M:brays.Beamer.TargetIsActive(System.Int32)">
+            <summary>
+            Starts a probing loop and awaits for a response. 
+            </summary>
+            <param name="awaitMS">By default waits forever (-1).</param>
+            <returns>False on timeout.</returns>
+        </member>
+        <member name="M:brays.Beamer.LockOn(System.Net.IPEndPoint,System.Net.IPEndPoint)">
+            <summary>
+            Creates a new socket, starts the listening, cleanup and pulsing tasks. 
+            If invoked concurrently only the first call will enter, the rest will 
+            return false immediately.
+            </summary>
+            <param name="listen">The local endpoint.</param>
+            <param name="target">The remote endpoint.</param>
+            <returns>True on success.</returns>
+        </member>
+        <member name="M:brays.Beamer.LockOn(System.Net.IPEndPoint,System.Net.IPEndPoint,System.Int32)">
+            <summary>
+            Combines LockOn and TargetIsActive().
+            </summary>
+            <param name="listen">The local endpoint.</param>
+            <param name="target">The remote endpoint.</param>
+            <param name="awaitMS">Infinite timeout is -1.</param>
+            <returns>False if either LockOn or TargetIsActive return false.</returns>
+        </member>
+        <member name="M:brays.Beamer.ConfigRequest">
+            <summary>
+            Awaits for the remote config.
+            </summary>
+        </member>
+        <member name="M:brays.Beamer.ConfigPush">
+            <summary>
+            Updates the target with the current config.
+            If the listen endpoint setting has changed, the target beamer will LockOn the new one.
+            </summary>
+        </member>
+        <member name="M:brays.Beamer.TileXFF(System.Span{System.Byte},System.Action{System.MemoryFragment})">
+            <summary>
+            Sends a tile in a fire-and-forget manner, i.e. there will be no retries.
+            </summary>
+            <param name="data">The bits.</param>
+            <param name="onTileXAwait">If the tile reaches the target it may reply.</param>
+        </member>
+        <member name="M:brays.Beamer.Pulse(System.Span{System.Byte})">
+            <summary>
+            Compacts multiple small packets into datagrams of TileSizeBytes size. 
+            The bits are sent after either the PulseRetentionMS interval expires or enough
+            bytes are zipped. 
+            </summary>
+            <param name="data">The bytes.</param>
+            <returns>A reset event to wait for a status (SignalKind.ACK).
+            Note that the resetEvent is shared and will be reset for the next pulse.</returns>
+        </member>
+        <member name="M:brays.Beamer.Beam(System.MemoryFragment,System.Int32)">
+            <summary>
+            Sends the fragment to the target beamer in BeamRetriesCount retries, awaiting BeamAwaitMS on failure.
+            </summary>
+            <param name="f">The data to transfer.</param>
+            <param name="timeoutMS">By default is infinite (-1).</param>
+            <returns>False on failure, including a timeout.</returns>
+        </member>
+        <member name="M:brays.BeamerCfg.#ctor(System.IMemoryHighway,System.IMemoryHighway,System.IMemoryHighway,brays.BeamerLogCfg)">
+            <summary>
+            Creates a RayBeamer configuration instance.
+            </summary>
+            <param name="receiveHighway">For the blocks, i.e. do not assume lengths.</param>
+            <param name="tileXHighway">For tile exchanges. Pass null to init with a heap hw with 65K lanes.</param>
+            <param name="logcfg">The logging settings.</param>
+        </member>
+        <member name="F:brays.BeamerCfg.EnablePulsing">
+            <summary>
+            Pulsing reserves one thread for arranging packets into dgrams.
+            This is useful when one needs to send large number of tiny messages
+            as they are zipped together into few tiles.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.PulseRetentionMS">
+            <summary>
+            The max pulse delay.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.ConfigExchangeTimeout">
+            <summary>
+            The await for the remote config when exchanging.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.ReceiveBufferSize">
+            <summary>
+            The default value is ushort.MaxValue * 400
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.SendBufferSize">
+            <summary>
+            The default value is ushort.MaxValue * 200
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.MaxBeamedTilesAtOnce">
+            <summary>
+            Prevents dgram losses and re-beams.
+            This threshold affects only the block beams, where each tile is TileSizeBytes.
+            If the remote ReceiveBufferSize / remote.TileSizeBytes is less than this value
+            the smaller setting will be applied.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.MaxConcurrentReceives">
+            <summary>
+            The concurrent socket listeners count.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.Log">
+            <summary>
+            The log configuration.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.EnableProbes">
+            <summary>
+            If true - sends probe dgrams every ProbeFreqMS. 
+            The default is false.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.ProbeFreqMS">
+            <summary>
+            The default value is 4sec.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.TileSizeBytes">
+            <summary>
+            The desired dgram size. It's used for all block exchanges.
+            The default value is 40K.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.ErrorAwaitMS">
+            <summary>
+            This is the receive loop error sleep between retries.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.MaxReceiveRetries">
+            <summary>
+            After receiving this number of 0-bytes, the Beamer shuts down.
+            The failed receives are separated by ErrorAwaitMS.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.SendRetries">
+            <summary>
+            The number of unconfirmed status dgram sends before bailing the ongoing operation. 
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.RetryDelayStartMS">
+            <summary>
+            The SendRetries loop starting await value in milliseconds. 
+            Each subsequent failure multiplies the await by RetryDelayStepMultiplier.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.RetryDelayStepMultiplier">
+            <summary>
+            After each retry the RetryDelayStartMS is multiplied by this value.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.CleanupFreqMS">
+            <summary>
+            The cleanup triggering frequency.
+            The default is 8sec.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.BeamRetryDelayStartMS">
+            <summary>
+            The starting retry delay in the Beam() loop in milliseconds.
+            Each subsequent failure multiplies the await by RetryDelayStepMultiplier.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.BeamRetriesCount">
+            <summary>
+            Beam() is invoked in a loop up to this number of times or until a status is received.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.ProcessedFramesIDRetention">
+            <summary>
+            A set of received frame IDs is kept for protecting against double processing.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.SentSignalsRetention">
+            <summary>
+            The out signals are kept for re-sending when dgrams are lost.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.SentBlockRetention">
+            <summary>
+            All sent blocks are deleted this amount of time after being sent.
+            Re-beams offsets the sent time.
+            Note that the blocks may be disposed long before the cleanup.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.AwaitsCleanupAfter">
+            <summary>
+            The amount of time before deleting the awaiting frame reply callbacks.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.WaitAfterAllSentMS">
+            <summary>
+            If all tiles are sent but not received yet, the receiver will wait this amount
+            of time before sending the current tile bit map for re-beaming. 
+            </summary>
+            <remarks>
+            In practice the last few tiles of a block will arrive after the all-sent status signal,
+            so this value should be greater than zero in order to prevent unnecessary re-transmissions. 
+            </remarks>
+        </member>
+        <member name="F:brays.BeamerCfg.OutHighway">
+            <summary>
+            Where the dgrams are composed.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.ReceiveHighway">
+            <summary>
+            Where the blocks are assembled.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.TileExchangeHighway">
+            <summary>
+            Where the tileX response fragments are allocated.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerCfg.ScheduleCallbacksOn">
+            <summary>
+            Where the callback will be scheduled on.
+            </summary>
+        </member>
+        <member name="T:brays.CallbackThread">
+            <summary>
+            Where the onReceived and onReceivedAsync callbacks will execute.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.RotateLogAtStart">
+            <summary>
+            The beamer init will create a new log file. 
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.OnTrace">
+            <summary>
+            If not null will be invoked on each trace.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.LogFilePath">
+            <summary>
+            The trace file path.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.Ext">
+            <summary>
+            The log file extension.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.IsEnabled">
+            <summary>
+            Enables the tracer.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.RotationLogFileKB">
+            <summary>
+            The max log file size in KB.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.Flags">
+            <summary>
+            The trace-enabled ops.
+            </summary>
+        </member>
+        <member name="F:brays.BeamerLogCfg.LogUnhandledCallbackExceptions">
+            <summary>
+            If true, exceptions from the consumer's callback will be logged.
+            The default is false.
+            </summary>
+        </member>
+        <member name="M:brays.XCfg.#ctor(brays.BeamerCfg,brays.XLogCfg,System.IMemoryHighway)">
+            <param name="outHighway">The memory highway, used for sending tiles. 
+            If null, a HeapHighway with default capacity of 65KB is used.</param>
+        </member>
+        <member name="F:brays.XCfg.RepliesTTL">
+            <summary>
+            The exchange response callbacks will be deleted after this amount 
+            of time after their creation.
+            </summary>
+        </member>
+        <member name="F:brays.XCfg.CleanupFreqMS">
+            <summary>
+            The collection delay interval.
+            </summary>
+        </member>
+        <member name="F:brays.XCfg.PropagateExceptions">
+            <summary>
+            If the request accepts replies, the XPU will serialize unhandled exceptions as payload. 
+            The received exchange will have an error code SerializedException.
+            </summary>
+        </member>
+        <member name="F:brays.XLogCfg.RotateLogAtStart">
+            <summary>
+            Will create a new log file. 
+            </summary>
+        </member>
+        <member name="F:brays.XLogCfg.LogFilePath">
+            <summary>
+            The trace file path.
+            </summary>
+        </member>
+        <member name="F:brays.XLogCfg.Ext">
+            <summary>
+            The log file extension.
+            </summary>
+        </member>
+        <member name="F:brays.XLogCfg.IsEnabled">
+            <summary>
+            Enables the tracer.
+            </summary>
+        </member>
+        <member name="F:brays.XLogCfg.RotationLogFileKB">
+            <summary>
+            The max log file size in KB.
+            </summary>
+        </member>
+        <member name="F:brays.XLogCfg.Flags">
+            <summary>
+            The trace-enabled flags.
+            </summary>
+        </member>
+        <member name="F:brays.XLogCfg.State">
+            <summary>
+            The exchange state mask.
+            </summary>
+        </member>
+        <member name="T:brays.Gate">
+            <summary>
+            Allows one thread at a time to enter.
+            </summary>
+        </member>
+        <member name="M:brays.Gate.Enter">
+            <summary>
+            Only one thread can enter at a time.
+            </summary>
+            <returns>True if entered.</returns>
+        </member>
+        <member name="M:brays.Gate.Exit">
+            <summary>
+            Leaves the gate. If the gate is initialized with threadAffinity
+            and the calling thread is not the one which entered will throw an InvariantException.
+            </summary>
+            <exception cref="T:System.InvariantException">When created with thread affinity and 
+            the thread that calls Exit() is not the same that entered. </exception>
+        </member>
+        <member name="T:brays.ResetEvent">
+            <summary>
+            An await-able ManualResetEvent.
+            </summary>
+        </member>
+        <member name="M:brays.ResetEvent.#ctor(System.Boolean)">
+            <summary>
+            Creates a TaskCompletionSource.
+            </summary>
+            <param name="isAutoResetAllowed">
+            If false, the autoreset argument in Wait() and Set() is ignored.</param>
+        </member>
+        <member name="M:brays.ResetEvent.Wait(System.Int32,System.Boolean)">
+            <summary>
+            Waits for the first of either a Set() call or a timeout.
+            </summary>
+            <param name="timoutMS">Negative is infinite.</param>
+            <param name="autoreset">On timeout calls Reset() and awaits again.</param>
+            <returns>The Set() value or -1 if timeouts.</returns>
+        </member>
+        <member name="M:brays.ResetEvent.Wait(System.TimeSpan,System.Boolean)">
+            <summary>
+            Waits for either a Set() call or a timeout.
+            </summary>
+            <param name="timeout">The timespan before Set(-1).</param>
+            <returns>The Set() value or -1 if timeouts.</returns>
+        </member>
+        <member name="M:brays.ResetEvent.Set(System.Int32,System.Boolean)">
+            <summary>
+            Signals the completion of the task.
+            </summary>
+            <param name="state">The result state. Default is 1.</param>
+            <param name="autoreset">Sets the ResetEvent to wait again.</param>
+        </member>
+        <member name="M:brays.ResetEvent.Set(System.Boolean,System.Boolean)">
+            <summary>
+            Signals the completion of the task.
+            </summary>
+            <param name="state">The result state. Default is 1.</param>
+            <param name="autoreset">Sets the ResetEvent to wait again.</param>
+        </member>
+        <member name="M:brays.ResetEvent.Reset(System.Nullable{System.Int32})">
+            <summary>
+            Creates a new TaskCompletionSource to await.
+            </summary>
+            <param name="setPrevState">A state to resolve the previous task with, if not completed.</param>
+        </member>
+        <member name="T:brays.XPU">
+            <summary>
+            Exchange processing unit
+            </summary>
+        </member>
+        <member name="M:brays.XPU.Dispose">
+            <summary>
+            Disposes the underlying Beamer. 
+            Safe for concurrent calls.
+            </summary>
+        </member>
+        <member name="M:brays.XPU.Start(System.Net.IPEndPoint,System.Net.IPEndPoint)">
+            <summary>
+            Locks on the target endpoint.
+            </summary>
+            <param name="listen">The local endpoint</param>
+            <param name="target">The remote endpoint</param>
+            <returns>True if succeeds</returns>
+        </member>
+        <member name="M:brays.XPU.Start(System.Net.IPEndPoint,System.Net.IPEndPoint,System.Int32)">
+            <summary>
+            Locks on the target endpoint and awaits the target to become active.
+            </summary>
+            <param name="listen">The local endpoint</param>
+            <param name="target">The remote endpoint</param>
+            <param name="awaitMS">The beamer's TargetIsActive() timeout.</param>
+            <returns>True if succeeds</returns>
+        </member>
+        <member name="M:brays.XPU.TargetIsActive(System.Int32)">
+            <summary>
+            Requests and awaits for a probe to arrive.
+            </summary>
+            <param name="awaitMS">The timeout.</param>
+            <returns></returns>
+        </member>
+        <member name="T:System.Log">
+            <summary>
+            Simple file logger
+            </summary>
+        </member>
+        <member name="M:System.Log.#ctor(System.String,System.String,System.Int32,System.Boolean)">
+            <summary>
+            Creates an instance of the logger. It's bound to the filename provided and
+            will rotate it after the maxSizeKb is reached. The new file name will be 
+            filename plus the creation time of the new file.
+            </summary>
+            <remarks>
+            If no full path is provided uses the AppDomain.CurrentDomain.BaseDirectory.
+            When there are multiple versions of the same file will select the latest by name.
+            </remarks>
+            <param name="filename">The log file name or full path without the extension.</param>
+            <param name="ext">The file extension, if any.</param>
+            <param name="maxSizeKb">The max file size before creating a new file.</param>
+        </member>
+        <member name="M:System.Log.Write(System.String,System.String,System.Boolean)">
+            <summary>
+            The method serializes the writes with a lock.
+            </summary>
+            <param name="title">On the same line as the time.</param>
+            <param name="text">Text under the title.</param>
+            <param name="flush">By default is true.</param>
+        </member>
+        <member name="M:System.Log.Dispose">
+            <summary>
+            Flushes before disposal.
+            </summary>
+        </member>
+    </members>
+</doc>

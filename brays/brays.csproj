@@ -9,12 +9,19 @@
     <Version>0.8.0</Version>
     <Product>brays</Product>
     <PackageId>brays</PackageId>
-    <Description>Infrastructure for C2C RPC over UDP.</Description>
-    <PackageLicenseUrl>https://www.mozilla.org/en-US/MPL/2.0/</PackageLicenseUrl>
+    <Description>Infrastructure for C2C RPC over reliable UDP.</Description>
+    <PackageLicenseUrl></PackageLicenseUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIconUrl>https://raw.githubusercontent.com/arsuq/brays/master/brays/brays.png</PackageIconUrl>
+    <PackageProjectUrl>https://github.com/arsuq/brays.git</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/arsuq/brays</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>socket, UDP</PackageTags>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DefineConstants></DefineConstants>
+    <DocumentationFile>C:\Github\brays\brays\brays.xml</DocumentationFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Assert|AnyCPU'">
@@ -25,6 +32,17 @@
 
   <ItemGroup>
     <PackageReference Include="MemoryLanes" Version="2.1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="res\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>

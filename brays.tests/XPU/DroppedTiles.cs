@@ -106,7 +106,7 @@ namespace brays.tests
 			var md5 = MD5.Create().ComputeHash(tpl.data);
 			var eql = Assert.SameValues(md5, tpl.hash);
 
-			ix.XPU.Reply(ix, eql);
+			ix.Reply(eql);
 		}
 	}
 }

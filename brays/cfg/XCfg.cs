@@ -8,6 +8,8 @@ namespace brays
 {
 	public class XCfg
 	{
+		public XCfg(BeamerCfg bcfg, IMemoryHighway outHighway) : this(bcfg, null, outHighway) { }
+
 		/// <param name="outHighway">The memory highway, used for sending tiles. 
 		/// If null, a HeapHighway with default capacity of 65KB is used.</param>
 		public XCfg(BeamerCfg bcfg, XLogCfg log, IMemoryHighway outHighway)
@@ -22,7 +24,7 @@ namespace brays
 		/// The exchange response callbacks will be deleted after this amount 
 		/// of time after their creation.
 		/// </summary>
-		public TimeSpan RepliesTTL = new TimeSpan(0, 1, 0);
+		public TimeSpan RepliesTTL = new TimeSpan(0, 5, 0);
 
 		/// <summary>
 		/// The collection delay interval.
