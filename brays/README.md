@@ -67,15 +67,15 @@ The Beamer's API is very simple:
 ```csharp
 public class Beamer : IDisposable
 {
-    public Beamer(Action<MemoryFragment> onReceive, BeamerCfg cfg)
-    public Beamer(Func<MemoryFragment, Task> onReceiveAsync, BeamerCfg cfg)
+    public Beamer(Action<MemoryFragment> onReceive, BeamerCfg cfg){}
+    public Beamer(Func<MemoryFragment, Task> onReceiveAsync, BeamerCfg cfg){}
 
-    public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS)
-    public async Task<bool> Beam(MemoryFragment f, int timeoutMS = -1)
-    public ResetEvent Pulse(Span<byte> data)
-    public void TileXFF(Span<byte> data, Action<MemoryFragment> onTileXAwait)
-    public bool Probe(int awaitMS = 2000)
-    public Task<bool> TargetIsActive(int awaitMS = -1)
+    public async Task<bool> LockOn(IPEndPoint listen, IPEndPoint target, int awaitMS){}
+    public async Task<bool> Beam(MemoryFragment f, int timeoutMS = -1){}
+    public ResetEvent Pulse(Span<byte> data){}
+    public void TileXFF(Span<byte> data, Action<MemoryFragment> onTileXAwait){}
+    public bool Probe(int awaitMS = 2000){}
+    public Task<bool> TargetIsActive(int awaitMS = -1){}
 
     // More 
 }
@@ -157,28 +157,22 @@ public class XPU : IDisposable
 {
     public XPU(XCfg cfg)
 
-    public bool Start(IPEndPoint listen, IPEndPoint target)
-    public Task<bool> Start(IPEndPoint listen, IPEndPoint target, int awaitMS)
-    public Task<bool> TargetIsActive(int awaitMS = -1)
+    public bool Start(IPEndPoint listen, IPEndPoint target){}
+    public Task<bool> Start(IPEndPoint listen, IPEndPoint target, int awaitMS){}
+    public Task<bool> TargetIsActive(int awaitMS = -1){}
 
-    public bool RegisterAPI(string key, Action<Exchange> f)
-    public bool RegisterAPI(string key, Func<Exchange, Task> f)
-    public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _)
+    public bool RegisterAPI(string key, Action<Exchange> f){}
+    public bool RegisterAPI(string key, Func<Exchange, Task> f){}
+    public void UnregisterAPI(string key) => resAPIs.TryRemove(key, out _){}
 
-    public Task<Exchange> Request(Exchange ox, TimeSpan timeout = default)
-    public Task<Exchange> Request(string res, 
-        bool doNotReply = false, TimeSpan timeout = default)
-    public Task<Exchange> Request<O>(string res, O arg, 
-        bool doNotReply = false, TimeSpan timeout = default)
-    public Task<Exchange> RawRequest(string res, Span<byte> arg, 
-        bool doNotReply = false, TimeSpan timeout = default)
+    public Task<Exchange> Request(Exchange ox, TimeSpan timeout = default){}
+    public Task<Exchange> Request(string res, bool doNotReply = false, TimeSpan timeout = default){}
+    public Task<Exchange> Request<O>(string res, O arg, bool doNotReply = false, TimeSpan timeout = default){}
+    public Task<Exchange> RawRequest(string res, Span<byte> arg, bool doNotReply = false, TimeSpan timeout = default){}
 
-    public Task<Exchange> Reply<O>(Exchange x, O arg, int errorCode = 0, 
-        bool doNotReply = false, bool disposex = true, TimeSpan timeout = default)
-    public Task<Exchange> RawReply(Exchange x, Span<byte> arg, 
-        bool doNotReply = false, bool disposex = true, TimeSpan timeout = default)
-    public Task<Exchange> RawReply(Exchange x, int errorCode, 
-        bool disposex = true, TimeSpan timeout = default)
+    public Task<Exchange> Reply<O>(Exchange x, O arg, int errorCode = 0, bool doNotReply = false, bool disposex = true, TimeSpan timeout = default){}
+    public Task<Exchange> RawReply(Exchange x, Span<byte> arg, bool doNotReply = false, bool disposex = true, TimeSpan timeout = default){}
+    public Task<Exchange> RawReply(Exchange x, int errorCode, bool disposex = true, TimeSpan timeout = default){}
 
     // More
 }
@@ -192,15 +186,14 @@ timeout for the target to become active.
 
 **Example:**
 
-Function registration.
-
 ```csharp
 // somewhere
-var cfg = new XCfg() {  }
+var cfg = new XCfg(){};
 var xpu = new XPU(cfg);
-var src = new IPEndPoint(){}
-var trg = new IPEndPoint(){}
+var src = new IPEndPoint(){};
+var trg = new IPEndPoint(){};
 
+// Function registration
 xpu.RegisterAPI("api1-key", api1);
 xpu.Start(src, trg);
 
@@ -212,7 +205,7 @@ async Task api1(Exchange ix)
     // use t ...
 
     // ix can be replied to with any serializable type 
-    var r1 = await ix.Reply(anyType)
+    var r1 = await ix.Reply(anyType);  
 
     // ... continue exchanging
 }
