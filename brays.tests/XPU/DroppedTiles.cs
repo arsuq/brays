@@ -53,7 +53,7 @@ namespace brays.tests
 #endif
 				 },
 				 new XLogCfg("a", ta.Log),
-				 new HeapHighway(ushort.MaxValue)));
+				 new VirtualHighway()));
 
 			var b = new XPU(new XCfg(
 				 new BeamerCfg()
@@ -65,7 +65,7 @@ namespace brays.tests
 #endif
 				 },
 				 new XLogCfg("b", ta.Log),
-				 new HeapHighway(ushort.MaxValue)));
+				 new VirtualHighway()));
 
 			const string F = "verify_hash";
 
