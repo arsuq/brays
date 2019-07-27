@@ -6,7 +6,7 @@
     <Configurations>Debug;Release;Assert</Configurations>
     <Authors>Arsuq</Authors>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.8.0</Version>
+    <Version>0.8.1</Version>
     <Product>brays</Product>
     <PackageId>brays</PackageId>
     <Description>Infrastructure for C2C RPC over reliable UDP.</Description>
@@ -17,6 +17,7 @@
     <RepositoryUrl>https://github.com/arsuq/brays</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>socket, UDP</PackageTags>
+    <AssemblyVersion>0.8.1.0</AssemblyVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
