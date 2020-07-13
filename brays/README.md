@@ -3,7 +3,7 @@
 
 # brays
 
-> v0.8
+> v0.8.2
 
 
 Brays connects client processes with reliable UDP sockets.
